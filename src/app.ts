@@ -43,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const increaseFontSizeBtn = document.getElementById('increase-font-size') as HTMLButtonElement;
   const currentFontSizeSpan = document.getElementById('current-font-size') as HTMLSpanElement;
   const wordWrapToggle = document.getElementById('word-wrap-toggle') as HTMLInputElement;
-  const rawCompletionToggle = document.getElementById('raw-completion-toggle') as HTMLInputElement;
   
   // Initialize collapsible sections
   const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
@@ -187,10 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize auto-scroll with saved value
   const autoScrollToggle = document.getElementById('auto-scroll-toggle') as HTMLInputElement;
   autoScrollToggle.checked = savedAutoScroll === 'true';
-  
-  // Initialize raw completion toggle with saved value
-  const savedRawCompletion = loadFromLocalStorage('rawCompletion', 'false');
-  rawCompletionToggle.checked = savedRawCompletion === 'true';
 
   // Function to refresh model selects when API keys change
   function refreshModelSelects() {
@@ -343,11 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAutoScroll();
   });
   
-  // Raw completion toggle event handler
-  rawCompletionToggle.addEventListener('change', () => {
-    updateRawCompletion();
-  });
-  
   // Also add click handler to the auto-scroll toggle switch container for better usability
   const autoScrollToggleSwitch = autoScrollToggle.closest('.toggle-switch') as HTMLElement;
   if (autoScrollToggleSwitch) {
@@ -363,11 +353,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Update auto-scroll and save to localStorage
   function updateAutoScroll() {
     saveToLocalStorage('outputAutoScroll', autoScrollToggle.checked.toString());
-  }
-  
-  // Update raw completion and save to localStorage
-  function updateRawCompletion() {
-    saveToLocalStorage('rawCompletion', rawCompletionToggle.checked.toString());
   }
   
   // Load saved model and template selections if available
@@ -543,7 +528,46 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add elements to max tokens group
         maxTokensGroup.appendChild(maxTokensLabel);
         maxTokensGroup.appendChild(maxTokensInput);
-        
+
+        // Create raw completion toggle group (add this before exploreGroup is created)
+        const rawCompletionGroup = document.createElement('div');
+        rawCompletionGroup.className = 'raw-completion-input-group';
+
+        // Create label for raw completion
+        const rawCompletionLabel = document.createElement('label');
+        rawCompletionLabel.setAttribute('for', `raw-completion-${i}`);
+        rawCompletionLabel.textContent = `Use Raw Completion:`;
+
+        // Create toggle switch
+        const rawCompletionToggleContainer = document.createElement('div');
+        rawCompletionToggleContainer.className = 'toggle-switch';
+
+        const rawCompletionToggle = document.createElement('input');
+        rawCompletionToggle.type = 'checkbox';
+        rawCompletionToggle.id = `raw-completion-${i}`;
+
+        // Load saved raw completion value if available
+        const savedRawCompletion = loadFromLocalStorage(`raw-completion-${i}`, 'false');
+        rawCompletionToggle.checked = savedRawCompletion === 'true';
+
+        // Add event listener for toggle
+        rawCompletionToggle.addEventListener('change', () => {
+          saveToLocalStorage(`raw-completion-${i}`, rawCompletionToggle.checked.toString());
+        });
+
+        const rawCompletionSlider = document.createElement('span');
+        rawCompletionSlider.className = 'toggle-slider';
+
+        rawCompletionToggleContainer.appendChild(rawCompletionToggle);
+        rawCompletionToggleContainer.appendChild(rawCompletionSlider);
+
+        // Add elements to raw completion group
+        rawCompletionGroup.appendChild(rawCompletionLabel);
+        rawCompletionGroup.appendChild(rawCompletionToggleContainer);
+
+        // Insert raw completion group to left of max tokens
+        maxTokensGroup.insertBefore(rawCompletionGroup, maxTokensLabel);
+
         // Create explore mode toggle group
         const exploreGroup = document.createElement('div');
         exploreGroup.className = 'explore-mode-input-group';
@@ -1861,7 +1885,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (seedInput.value.trim()) {
         seed = parseInt(seedInput.value);
       }
-      
+
+      // Get raw completion settings for each model
+      const rawCompletionPerModel: boolean[] = [];
+      for (let i = 0; i < models.length; i++) {
+        const rawCompletionToggle = document.getElementById(`raw-completion-${i}`) as HTMLInputElement;
+        const isRawCompletion = rawCompletionToggle ? rawCompletionToggle.checked : false;
+        rawCompletionPerModel.push(isRawCompletion);
+      }
+
       // Get explore mode settings
       const exploreModeSettings = loadExploreModeSettings();
       
@@ -1889,7 +1921,7 @@ document.addEventListener('DOMContentLoaded', () => {
         seed,
         exploreModeSettings,
         exploreSelectionCallback,
-        rawCompletionToggle.checked // Pass raw completion state
+        rawCompletionPerModel,
       );
       
       addOutputMessage('System', `Starting conversation with template "${templateName}"...`);

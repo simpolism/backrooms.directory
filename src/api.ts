@@ -155,7 +155,7 @@ export async function openrouterConversation(
       max_tokens: maxTokens,
       stream: true,
       // Add stop sequences if needed for raw completion
-      stop: ["System:", "system:", "User:", "Assistant:", "user:", "assistant:"],
+      stop: ["User:", "Assistant:", "user:", "assistant:", "System:", "system:"],
     };
     apiUrl = 'https://openrouter.ai/api/v1/completions'; // Use completions endpoint
   } else {

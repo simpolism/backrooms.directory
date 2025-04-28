@@ -94,7 +94,7 @@ export class Conversation {
     seed?: number,
     exploreModeSettings: ExploreModeSettings = {},
     selectionCallback: SelectionCallback | null = null,
-    private isRawCompletion: boolean = false // Add raw completion parameter
+    private isRawCompletionPerModel: boolean[] = []
   ) {
     this.models = models;
     this.systemPrompts = systemPrompts;
@@ -399,7 +399,7 @@ export class Conversation {
         streamingCallback,
         abortController.signal,
         this.seed ? this.seed + i : undefined, // Use different seeds for diversity
-        this.isRawCompletion // Pass the raw completion flag
+        this.isRawCompletionPerModel[i]
       ).then(response => {
         // Mark as complete
         const currentResponse = this.parallelResponses.get(responseId);
@@ -575,7 +575,7 @@ export class Conversation {
             streamingCallback, // Pass the streaming callback
             this.abortController.signal, // Pass the abort signal
             this.seed, // Pass the seed if provided
-            this.isRawCompletion // Pass the raw completion flag
+            this.isRawCompletionPerModel[i]
           );
         }
         
