@@ -26,7 +26,6 @@ export interface ConversationOptions {
 }
 
 export interface ApiKeys {
-  hyperbolicApiKey: string;
   openrouterApiKey: string;
 }
 

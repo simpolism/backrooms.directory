@@ -10,7 +10,6 @@ import {
 } from './types';
 import { MODEL_INFO } from './models';
 import {
-  hyperbolicCompletionConversation,
   openrouterConversation,
 } from './api';
 import { loadFromLocalStorage } from './utils';
@@ -25,55 +24,37 @@ export function generateModelResponse(
   modelIndex?: number,
   onChunk?: StreamingCallback,
   abortSignal?: AbortSignal,
-  seed?: number
+  seed?: number,
+  isRawCompletion: boolean = false // Add isRawCompletion parameter
 ): Promise<string> {
-  // Determine which API to use based on the company
-  const company = modelInfo.company;
+  let apiName = modelInfo.api_name;
   
-  if (company === 'hyperbolic_completion') {
-    return hyperbolicCompletionConversation(
-      actor,
-      modelInfo.api_name,
-      context,
-      systemPrompt,
-      apiKeys.hyperbolicApiKey,
-      maxOutputLength,
-      onChunk,
-      abortSignal,
-      seed
-    );
-  } else if (company === 'openrouter') {
-    // If this is the custom OpenRouter model, use the saved API name
-    let apiName = modelInfo.api_name;
-    
-    if (modelInfo.is_custom_selector && modelIndex !== undefined) {
-      const savedModel = loadFromLocalStorage(`openrouter_custom_model_${modelIndex}`, null);
-      if (savedModel) {
-        try {
-          const savedModelData = JSON.parse(savedModel);
-          if (savedModelData.id) {
-            apiName = savedModelData.id;
-          }
-        } catch (e) {
-          console.error('Error parsing saved model:', e);
+  if (modelInfo.is_custom_selector && modelIndex !== undefined) {
+    const savedModel = loadFromLocalStorage(`openrouter_custom_model_${modelIndex}`, null);
+    if (savedModel) {
+      try {
+        const savedModelData = JSON.parse(savedModel);
+        if (savedModelData.id) {
+          apiName = savedModelData.id;
         }
+      } catch (e) {
+        console.error('Error parsing saved model:', e);
       }
     }
-    
-    return openrouterConversation(
-      actor,
-      apiName,
-      context,
-      systemPrompt,
-      apiKeys.openrouterApiKey,
-      maxOutputLength,
-      onChunk,
-      abortSignal,
-      seed
-    );
-  } else {
-    throw new Error(`Unsupported model company: ${company}`);
   }
+  
+  return openrouterConversation(
+    actor,
+    apiName,
+    context,
+    systemPrompt,
+    apiKeys.openrouterApiKey,
+    maxOutputLength,
+    onChunk,
+    abortSignal,
+    seed,
+    isRawCompletion // Pass the raw completion flag
+  );
 }
 
 export class Conversation {
@@ -112,7 +93,8 @@ export class Conversation {
     outputCallback: (actor: string, response: string, elementId?: string, isLoading?: boolean) => void,
     seed?: number,
     exploreModeSettings: ExploreModeSettings = {},
-    selectionCallback: SelectionCallback | null = null
+    selectionCallback: SelectionCallback | null = null,
+    private isRawCompletion: boolean = false // Add raw completion parameter
   ) {
     this.models = models;
     this.systemPrompts = systemPrompts;
@@ -135,7 +117,18 @@ export class Conversation {
     
     // Generate model display names
     this.modelDisplayNames = models.map((model, index) => {
-      return `${MODEL_INFO[model].display_name} ${index + 1}`;
+      // Derive display name from api_name for consistency with UI
+      const apiName = MODEL_INFO[model].api_name;
+      let displayName = apiName.split('/')[1] || apiName; // Get model ID part
+      displayName = displayName.replace(/-/g, ' '); // Replace dashes with spaces
+      
+      const parts = displayName.split(':');
+      displayName = parts[0].split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '); // Uppercase words
+      if (parts[1]) {
+        displayName += ` (${parts[1]})`; // Add anything after : in parentheses
+      }
+      
+      return `${displayName} ${index + 1}`;
     });
     
     // Check if explore mode is enabled for any model
@@ -405,7 +398,8 @@ export class Conversation {
         modelIndex,
         streamingCallback,
         abortController.signal,
-        this.seed ? this.seed + i : undefined // Use different seeds for diversity
+        this.seed ? this.seed + i : undefined, // Use different seeds for diversity
+        this.isRawCompletion // Pass the raw completion flag
       ).then(response => {
         // Mark as complete
         const currentResponse = this.parallelResponses.get(responseId);
@@ -580,7 +574,8 @@ export class Conversation {
             i, // Pass the model index
             streamingCallback, // Pass the streaming callback
             this.abortController.signal, // Pass the abort signal
-            this.seed // Pass the seed if provided
+            this.seed, // Pass the seed if provided
+            this.isRawCompletion // Pass the raw completion flag
           );
         }
         

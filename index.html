@@ -60,12 +60,6 @@
             <a href="https://openrouter.ai/keys" target="_blank" class="api-key-link">Get OpenRouter API Key</a>
           </div>
           
-          <div class="input-group">
-            <label for="hyperbolic-key">Hyperbolic API Key:</label>
-            <input type="password" id="hyperbolic-key" placeholder="Enter Hyperbolic API Key">
-            <a href="https://app.hyperbolic.xyz/settings" target="_blank" class="api-key-link">Get Hyperbolic API Key</a>
-          </div>
-          
         </div>
       </div>
       
@@ -131,7 +125,7 @@
       
       <div class="model-selection">
               <h2>Models</h2>
-              <p class="model-disclaimer">Models are available based on the API keys provided, with the Llama 405 models available through Hyperbolic and everything else through OpenRouter. OpenRouter supports many models not shown, available through the "custom" selection.</p>
+              <p class="model-disclaimer">Models are available through OpenRouter. OpenRouter supports many models not shown, available through the "custom" selection.</p>
               <p class="explore-mode-disclaimer">Explore mode allows you to generate multiple responses from each model and select your preferred output to continue the conversation.</p>
               <div id="model-inputs" class="model-inputs">
                 <div class="model-input-group">
@@ -170,6 +164,13 @@
             <label for="auto-scroll-toggle">Auto-Scroll:</label>
             <div class="toggle-switch">
               <input type="checkbox" id="auto-scroll-toggle" checked>
+              <span class="toggle-slider"></span>
+            </div>
+          </div>
+          <div class="output-setting-group">
+            <label for="raw-completion-toggle">Raw Completion:</label>
+            <div class="toggle-switch">
+              <input type="checkbox" id="raw-completion-toggle">
               <span class="toggle-slider"></span>
             </div>
           </div>

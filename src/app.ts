@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const increaseFontSizeBtn = document.getElementById('increase-font-size') as HTMLButtonElement;
   const currentFontSizeSpan = document.getElementById('current-font-size') as HTMLSpanElement;
   const wordWrapToggle = document.getElementById('word-wrap-toggle') as HTMLInputElement;
+  const rawCompletionToggle = document.getElementById('raw-completion-toggle') as HTMLInputElement;
   
   // Initialize collapsible sections
   const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
@@ -91,7 +92,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let isConversationRunning = false;
 
   // API key input elements
-  const hyperbolicKeyInput = document.getElementById('hyperbolic-key') as HTMLInputElement;
   const openrouterKeyInput = document.getElementById('openrouter-key') as HTMLInputElement;
   const openrouterOAuthButton = document.getElementById('openrouter-oauth-button') as HTMLButtonElement;
   
@@ -122,7 +122,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Load saved API keys if available
-  hyperbolicKeyInput.value = loadFromLocalStorage('hyperbolicApiKey', '');
   openrouterKeyInput.value = loadFromLocalStorage('openrouterApiKey', '');
   
   // Function to show temporary auth messages
@@ -188,7 +187,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize auto-scroll with saved value
   const autoScrollToggle = document.getElementById('auto-scroll-toggle') as HTMLInputElement;
   autoScrollToggle.checked = savedAutoScroll === 'true';
-  conversationOutput.style.whiteSpace = wordWrapToggle.checked ? 'pre-wrap' : 'pre';
+  
+  // Initialize raw completion toggle with saved value
+  const savedRawCompletion = loadFromLocalStorage('rawCompletion', 'false');
+  rawCompletionToggle.checked = savedRawCompletion === 'true';
 
   // Function to refresh model selects when API keys change
   function refreshModelSelects() {
@@ -200,11 +202,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Save API keys when changed and refresh model selects
-  hyperbolicKeyInput.addEventListener('change', () => {
-    saveToLocalStorage('hyperbolicApiKey', hyperbolicKeyInput.value);
-    refreshModelSelects();
-  });
-  
   openrouterKeyInput.addEventListener('change', () => {
     saveToLocalStorage('openrouterApiKey', openrouterKeyInput.value);
     refreshModelSelects();
@@ -346,6 +343,11 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAutoScroll();
   });
   
+  // Raw completion toggle event handler
+  rawCompletionToggle.addEventListener('change', () => {
+    updateRawCompletion();
+  });
+  
   // Also add click handler to the auto-scroll toggle switch container for better usability
   const autoScrollToggleSwitch = autoScrollToggle.closest('.toggle-switch') as HTMLElement;
   if (autoScrollToggleSwitch) {
@@ -361,6 +363,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Update auto-scroll and save to localStorage
   function updateAutoScroll() {
     saveToLocalStorage('outputAutoScroll', autoScrollToggle.checked.toString());
+  }
+  
+  // Update raw completion and save to localStorage
+  function updateRawCompletion() {
+    saveToLocalStorage('rawCompletion', rawCompletionToggle.checked.toString());
   }
   
   // Load saved model and template selections if available
@@ -943,7 +950,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Get current API keys
     const apiKeys = {
-      hyperbolic: hyperbolicKeyInput.value,
       openrouter: openrouterKeyInput.value
     };
 
@@ -958,29 +964,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add model options
     Object.keys(MODEL_INFO).forEach(modelKey => {
       const modelInfo = MODEL_INFO[modelKey];
-      const company = modelInfo.company;
+      const apiName = modelInfo.api_name;
+      const company = apiName.split('/')[0]; // Derive company from api_name
       
       // Create option element
       const option = document.createElement('option');
       option.value = modelKey;
       
-      // Determine if this model's API key is available
-      let apiKeyAvailable = false;
-      let apiKeyName = '';
+      // Derive display name from api_name
+      let displayName = apiName.split('/')[1] || apiName; // Get model ID part
+      displayName = displayName.replace(/-/g, ' '); // Replace dashes with spaces
       
-      if (company === 'hyperbolic' || company === 'hyperbolic_completion') {
-        apiKeyAvailable = !!apiKeys.hyperbolic;
-        apiKeyName = 'Hyperbolic';
-      } else if (company === 'openrouter') {
-        apiKeyAvailable = !!apiKeys.openrouter;
-        apiKeyName = 'OpenRouter';
+      const parts = displayName.split(':');
+      displayName = parts[0].split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '); // Uppercase words
+      if (parts[1]) {
+        displayName += ` (${parts[1]})`; // Add anything after : in parentheses
       }
       
-      // Set option text with API key info
-      option.textContent = `${modelInfo.display_name} (${modelKey}) - ${apiKeyName}`;
+      // Determine if OpenRouter API key is available
+      let apiKeyAvailable = !!apiKeys.openrouter;
+      let apiKeyName = 'OpenRouter';
       
-      // Add a visual indicator if API key is missing
-      if (!apiKeyAvailable) {
+      // Set option text with API key info
+      option.textContent = `${displayName} (${modelKey}) - ${apiKeyName}`;
+      
+      // Add a visual indicator if API key is missing (only for OpenRouter now)
+      if (company === 'openrouter' && !apiKeyAvailable) {
         option.textContent += ' [API Key Missing]';
         option.style.color = '#999';
       }
@@ -991,10 +1000,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set selected value based on priority:
     // 1. Use currentValue if provided (from current selections)
     // 2. Otherwise use saved model selections if available
+    // 3. Otherwise default to meta-llama/llama-3.1-405b:free
     if (currentValue) {
       select.value = currentValue;
     } else if (index !== undefined && savedModelSelections && savedModelSelections[index]) {
       select.value = savedModelSelections[index];
+    } else {
+      select.value = "meta-llama/llama-3.1-405b:free";
     }
     
     // Add change event listener to save selection and handle OpenRouter custom selector
@@ -1095,6 +1107,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize UI
   populateTemplateSelect();
   initializeTemplateEditor();
+  
+  // Populate model selects initially with defaults if no saved selections
+  const allModelSelects = document.querySelectorAll('.model-select') as NodeListOf<HTMLSelectElement>;
+  allModelSelects.forEach((select, index) => {
+    populateModelSelect(select, index, null); // Pass null for currentValue to trigger default logic
+  });
   
   // Create pause/resume buttons
   const pauseButton = document.createElement('button');
@@ -1786,33 +1804,33 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Get API keys
     const apiKeys: ApiKeys = {
-      hyperbolicApiKey: hyperbolicKeyInput.value,
       openrouterApiKey: openrouterKeyInput.value,
     };
     
-    // Validate required API keys
-    const requiredApis: Record<string, string> = {};
+    // Validate required API keys based on model pricing
+    let openrouterKeyRequired = false;
     
-    for (const model of models) {
-      const company = MODEL_INFO[model].company;
-      if (company === 'hyperbolic' || company === 'hyperbolic_completion') {
-        requiredApis['hyperbolicApiKey'] = 'Hyperbolic API Key';
-      } else if (company === 'openrouter') {
-        requiredApis['openrouterApiKey'] = 'OpenRouter API Key';
+    try {
+      const openrouterModels = await fetchOpenRouterModels(apiKeys.openrouterApiKey);
+      
+      for (const modelKey of models) {
+        const modelInfo = MODEL_INFO[modelKey];
+        const openrouterModel = openrouterModels.find(m => m.id === modelInfo.api_name);
+        
+        if (openrouterModel && (openrouterModel.pricing.prompt > 0 || openrouterModel.pricing.completion > 0)) {
+          openrouterKeyRequired = true;
+          break; // Key is required if any selected model has non-zero pricing
+        }
       }
+    } catch (error) {
+      console.error('Error fetching OpenRouter models for pricing check:', error);
+      // Assume key is required if fetching models fails
+      openrouterKeyRequired = true;
     }
     
-    // Check if any required API keys are missing
-    const missingKeys: string[] = [];
-    for (const [key, name] of Object.entries(requiredApis)) {
-      if (!apiKeys[key as keyof ApiKeys]) {
-        missingKeys.push(name);
-      }
-    }
-    
-    if (missingKeys.length > 0) {
-      addOutputMessage('System', `Error: Missing required API key(s): ${missingKeys.join(', ')}`);
-      return;
+    if (openrouterKeyRequired && !apiKeys.openrouterApiKey) {
+       addOutputMessage('System', `Error: OpenRouter API Key is required for the selected models.`);
+       return;
     }
     
     try {
@@ -1870,7 +1888,8 @@ document.addEventListener('DOMContentLoaded', () => {
         addOutputMessage,
         seed,
         exploreModeSettings,
-        exploreSelectionCallback
+        exploreSelectionCallback,
+        rawCompletionToggle.checked // Pass raw completion state
       );
       
       addOutputMessage('System', `Starting conversation with template "${templateName}"...`);

@@ -8,9 +8,7 @@ As backrooms.directory is a static site, most settings will be saved to your bro
 
 ### API Keys
 
-backrooms.directory supports two LLM completion providers: [OpenRouter](https://openrouter.ai/) and [Hyperbolic](https://hyperbolic.xyz/). The original project supported OpenAI and Anthropic as well, but these were removed due to API incompatibilities and frustrating rate limits. However, the Claude and GPT models are available through OpenRouter.
-
-Although OpenRouter supports all of the commonly used models, Hyperbolic is included as they host Llama 405B BASE, which has proven very fun to play with (thanks to [cosmicoptima](https://github.com/cosmicoptima/UniversalBackrooms) for the python implemenetation of Hyperbolic support).
+backrooms.directory currently uses [OpenRouter](https://openrouter.ai/) for all LLM completions. All models are available through the OpenRouter API.
 
 **I know it's insecure to put your API keys in a browser, so use at your own risk.**
 
@@ -18,11 +16,11 @@ Although OpenRouter supports all of the commonly used models, Hyperbolic is incl
 
 Templates are "conversation starter" files used to initialize the conversation so the LLMs have some context. They're formatted as JSONL files, which are JSON files that support newlines. Each line specifies the context for each sequential model (so, a JSONL file with 2 lines will be a conversation between 2 models). The [meta template](public\templates\meta-template.jsonl) is a good starting point for writing your own.
 
-Note that, for the purposes of chat completion, each LLM believes itself to be in the "assistant" role, while other models are "user" roles. This does not apply to Hyperbolic, which uses a prompt-completion format instead ("AI1" vs "AI2"). Work remains to be done on improving the Hyperbolic prompt configuration for cleaner outputs.
+Note that, for the purposes of chat completion, each LLM believes itself to be in the "assistant" role, while other models are "user" roles.
 
 ### Model Selection
 
-The dropdown comes pre-populated with several commonly used models from OpenRouter, as well as the Llama 405B models from Hyperbolic. There is also a "custom model" option, which will allow you to use any model available on OpenRouter.
+The dropdown comes pre-populated with several commonly used models available on OpenRouter. There is also a "custom model" option, which will allow you to use any other model available on OpenRouter.
 
 The "Max Completion Tokens" setting tells the provider the maximum length to generate. This can help you get shorter outputs to improve conversation speed, and also limit your API usage.
 
