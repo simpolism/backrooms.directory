@@ -48,7 +48,11 @@ export async function loadTemplate(
 
     for (let i = 0; i < models.length; i++) {
       companies.push(MODEL_INFO[models[i]].company);
-      const displayName = getModelDisplayName(models[i], i, MODEL_INFO[models[i]]);
+      const displayName = getModelDisplayName(
+        models[i],
+        i,
+        MODEL_INFO[models[i]]
+      );
       actors.push(`${displayName} ${i + 1}`);
     }
 

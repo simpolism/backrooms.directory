@@ -1290,7 +1290,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Set option text with API key info
-      const displayName = index !== undefined ? getModelDisplayName(modelKey, index, modelInfo) : modelInfo.display_name;
+      const displayName =
+        index !== undefined
+          ? getModelDisplayName(modelKey, index, modelInfo)
+          : modelInfo.display_name;
       option.textContent = `${displayName} (${modelKey}) - ${apiKeyName}`;
 
       // Add a visual indicator if API key is missing

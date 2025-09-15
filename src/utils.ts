@@ -100,7 +100,11 @@ export function loadFromLocalStorage(
   }
 }
 
-export function getModelDisplayName(model: string, modelIndex: number, modelInfo: any): string {
+export function getModelDisplayName(
+  model: string,
+  modelIndex: number,
+  modelInfo: any
+): string {
   if (modelInfo.is_custom_selector) {
     const savedModel = loadFromLocalStorage(
       `openrouter_custom_model_${modelIndex}`,
