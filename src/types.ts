@@ -48,6 +48,7 @@ export interface ParallelResponse {
   content: string;      // Current accumulated content
   isSelected: boolean;  // Whether this response has been selected by the user
   isComplete: boolean;  // Whether this response is complete
+  usage?: UsageData;    // Usage data for this response
 }
 
 // Selection callback for explore mode
@@ -62,4 +63,26 @@ export interface CustomTemplate {
   content: string;     // Raw JSONL content
   originalName?: string; // Name of original template if this is based on an existing one
   lastModified: number; // Timestamp
+}
+
+// Usage data for token counting and cost tracking
+export interface UsageData {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cost?: number; // Optional, calculated differently per provider
+}
+
+// Response from model including content and usage data
+export interface ModelResponse {
+  content: string;
+  usage: UsageData;
+  generationId?: string; // For OpenRouter cost lookup
+}
+
+// Cumulative usage tracking for the entire conversation
+export interface ConversationUsage {
+  totalTokens: number;
+  totalCost: number;
+  modelBreakdown: Record<string, UsageData>; // Model display name -> usage
 }

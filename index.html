@@ -203,6 +203,21 @@
       </div>
     </div>
     
+    <!-- Usage Statistics Section -->
+    <div id="usage-stats" class="usage-stats">
+      <div class="usage-header">
+        <span class="usage-title">Usage Statistics</span>
+        <button id="usage-toggle" class="usage-toggle" aria-label="Toggle usage breakdown">▼</button>
+      </div>
+      <div class="usage-totals">
+        <span class="usage-item">Total Tokens: <span id="total-tokens">0</span></span>
+        <span class="usage-item">Total Cost: $<span id="total-cost">0.00</span></span>
+      </div>
+      <div id="usage-breakdown" class="usage-breakdown" style="display: none;">
+        <!-- Per-model breakdown will be displayed here -->
+      </div>
+    </div>
+
     <div class="conversation-container">
       <div class="scroll-spacer"></div>
       <div id="conversation-output" class="conversation-output"></div>

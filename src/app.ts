@@ -3,7 +3,7 @@ import { MODEL_INFO } from './models';
 import { Conversation } from './conversation';
 import { loadTemplate, getAvailableTemplates, saveCustomTemplate, getCustomTemplate, clearCustomTemplate } from './templates';
 import { generateDistinctColors, getRgbColor, saveToLocalStorage, loadFromLocalStorage } from './utils';
-import { ApiKeys, CustomTemplate, ModelInfo, ExploreModeSettings, ExploreModeSetting, ParallelResponse, SelectionCallback } from './types';
+import { ApiKeys, CustomTemplate, ModelInfo, ExploreModeSettings, ExploreModeSetting, ParallelResponse, SelectionCallback, ConversationUsage, UsageData, ModelResponse } from './types';
 import {
   initiateOAuthFlow,
   handleOAuthCallback,
@@ -37,6 +37,20 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Track current template model count
   let currentTemplateModelCount = 2; // Default to 2 models
+
+  // Usage tracking state
+  let conversationUsage: ConversationUsage = {
+    totalTokens: 0,
+    totalCost: 0,
+    modelBreakdown: {}
+  };
+
+  // Usage statistics UI elements
+  const usageStats = document.getElementById('usage-stats') as HTMLDivElement;
+  const usageToggle = document.getElementById('usage-toggle') as HTMLButtonElement;
+  const totalTokensSpan = document.getElementById('total-tokens') as HTMLSpanElement;
+  const totalCostSpan = document.getElementById('total-cost') as HTMLSpanElement;
+  const usageBreakdown = document.getElementById('usage-breakdown') as HTMLDivElement;
   
   // Font size and word wrap controls
   const decreaseFontSizeBtn = document.getElementById('decrease-font-size') as HTMLButtonElement;
@@ -125,6 +139,91 @@ document.addEventListener('DOMContentLoaded', () => {
   hyperbolicKeyInput.value = loadFromLocalStorage('hyperbolicApiKey', '');
   openrouterKeyInput.value = loadFromLocalStorage('openrouterApiKey', '');
   
+  // Usage tracking functions
+  function resetUsageTracking() {
+    conversationUsage = {
+      totalTokens: 0,
+      totalCost: 0,
+      modelBreakdown: {}
+    };
+    updateUsageDisplay();
+  }
+
+  function updateUsageWithResponse(modelDisplayName: string, usage: UsageData) {
+    // Update total stats
+    conversationUsage.totalTokens += usage.totalTokens;
+    conversationUsage.totalCost += (usage.cost || 0);
+
+    // Update model breakdown
+    if (!conversationUsage.modelBreakdown[modelDisplayName]) {
+      conversationUsage.modelBreakdown[modelDisplayName] = {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cost: 0
+      };
+    }
+
+    const modelStats = conversationUsage.modelBreakdown[modelDisplayName];
+    modelStats.promptTokens += usage.promptTokens;
+    modelStats.completionTokens += usage.completionTokens;
+    modelStats.totalTokens += usage.totalTokens;
+    modelStats.cost = (modelStats.cost || 0) + (usage.cost || 0);
+
+    updateUsageDisplay();
+  }
+
+  function updateUsageDisplay() {
+    // Update totals
+    totalTokensSpan.textContent = conversationUsage.totalTokens.toLocaleString();
+    totalCostSpan.textContent = conversationUsage.totalCost.toFixed(4);
+
+    // Update breakdown
+    usageBreakdown.innerHTML = '';
+    Object.entries(conversationUsage.modelBreakdown).forEach(([modelName, stats]) => {
+      const modelDiv = document.createElement('div');
+      modelDiv.className = 'model-usage';
+
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'model-name';
+      nameDiv.textContent = modelName;
+
+      const statsDiv = document.createElement('div');
+      statsDiv.className = 'model-stats';
+
+      const tokensDiv = document.createElement('div');
+      tokensDiv.className = 'model-stat';
+      tokensDiv.innerHTML = `
+        <div class="model-stat-label">Tokens</div>
+        <div class="model-stat-value">${stats.totalTokens.toLocaleString()}</div>
+      `;
+
+      const costDiv = document.createElement('div');
+      costDiv.className = 'model-stat';
+      costDiv.innerHTML = `
+        <div class="model-stat-label">Cost</div>
+        <div class="model-stat-value">$${(stats.cost || 0).toFixed(4)}</div>
+      `;
+
+      statsDiv.appendChild(tokensDiv);
+      statsDiv.appendChild(costDiv);
+
+      modelDiv.appendChild(nameDiv);
+      modelDiv.appendChild(statsDiv);
+
+      usageBreakdown.appendChild(modelDiv);
+    });
+  }
+
+  function initializeUsageTracking() {
+    // Toggle breakdown visibility
+    usageToggle.addEventListener('click', () => {
+      const isExpanded = usageBreakdown.style.display !== 'none';
+      usageBreakdown.style.display = isExpanded ? 'none' : 'block';
+      usageToggle.textContent = isExpanded ? '▼' : '▲';
+    });
+  }
+
   // Function to show temporary auth messages
   function showAuthMessage(message: string, isError: boolean = false, duration: number = 5000) {
     // Set message and styling
@@ -1710,9 +1809,12 @@ document.addEventListener('DOMContentLoaded', () => {
   async function startConversation() {
     // Hide export button when starting a new conversation
     exportButton.style.display = 'none';
-    
+
     // Clear previous output
     conversationOutput.innerHTML = '';
+
+    // Reset usage tracking for new conversation
+    resetUsageTracking();
     
     // Get all model selects
     const allModelSelects = document.querySelectorAll('.model-select') as NodeListOf<HTMLSelectElement>;
@@ -1870,7 +1972,8 @@ document.addEventListener('DOMContentLoaded', () => {
         addOutputMessage,
         seed,
         exploreModeSettings,
-        exploreSelectionCallback
+        exploreSelectionCallback,
+        updateUsageWithResponse
       );
       
       addOutputMessage('System', `Starting conversation with template "${templateName}"...`);
@@ -1931,4 +2034,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loadButton.disabled = false;
     }
   }
+
+  // Initialize usage tracking
+  initializeUsageTracking();
 });
