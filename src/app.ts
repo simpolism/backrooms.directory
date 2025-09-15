@@ -40,6 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Usage tracking state
   let conversationUsage: ConversationUsage = {
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
     totalTokens: 0,
     totalCost: 0,
     modelBreakdown: {}
@@ -48,6 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Usage statistics UI elements
   const usageStats = document.getElementById('usage-stats') as HTMLDivElement;
   const usageToggle = document.getElementById('usage-toggle') as HTMLButtonElement;
+  const totalInputTokensSpan = document.getElementById('total-input-tokens') as HTMLSpanElement;
+  const totalOutputTokensSpan = document.getElementById('total-output-tokens') as HTMLSpanElement;
   const totalTokensSpan = document.getElementById('total-tokens') as HTMLSpanElement;
   const totalCostSpan = document.getElementById('total-cost') as HTMLSpanElement;
   const usageBreakdown = document.getElementById('usage-breakdown') as HTMLDivElement;
@@ -142,6 +146,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Usage tracking functions
   function resetUsageTracking() {
     conversationUsage = {
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
       totalTokens: 0,
       totalCost: 0,
       modelBreakdown: {}
@@ -182,6 +188,8 @@ document.addEventListener('DOMContentLoaded', () => {
       modelStats.cost = costToAdd;
     } else {
       // Regular update: add tokens and cost
+      conversationUsage.totalInputTokens += usage.promptTokens;
+      conversationUsage.totalOutputTokens += usage.completionTokens;
       conversationUsage.totalTokens += usage.totalTokens;
       conversationUsage.totalCost += costToAdd;
 
@@ -196,6 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateUsageDisplay() {
     // Update totals
+    totalInputTokensSpan.textContent = conversationUsage.totalInputTokens.toLocaleString();
+    totalOutputTokensSpan.textContent = conversationUsage.totalOutputTokens.toLocaleString();
     totalTokensSpan.textContent = conversationUsage.totalTokens.toLocaleString();
     totalCostSpan.textContent = conversationUsage.totalCost.toFixed(7);
 
@@ -212,10 +222,24 @@ document.addEventListener('DOMContentLoaded', () => {
       const statsDiv = document.createElement('div');
       statsDiv.className = 'model-stats';
 
+      const inputTokensDiv = document.createElement('div');
+      inputTokensDiv.className = 'model-stat';
+      inputTokensDiv.innerHTML = `
+        <div class="model-stat-label">Input</div>
+        <div class="model-stat-value">${stats.promptTokens.toLocaleString()}</div>
+      `;
+
+      const outputTokensDiv = document.createElement('div');
+      outputTokensDiv.className = 'model-stat';
+      outputTokensDiv.innerHTML = `
+        <div class="model-stat-label">Output</div>
+        <div class="model-stat-value">${stats.completionTokens.toLocaleString()}</div>
+      `;
+
       const tokensDiv = document.createElement('div');
       tokensDiv.className = 'model-stat';
       tokensDiv.innerHTML = `
-        <div class="model-stat-label">Tokens</div>
+        <div class="model-stat-label">Total</div>
         <div class="model-stat-value">${stats.totalTokens.toLocaleString()}</div>
       `;
 
@@ -226,6 +250,8 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="model-stat-value">$${(stats.cost || 0).toFixed(7)}</div>
       `;
 
+      statsDiv.appendChild(inputTokensDiv);
+      statsDiv.appendChild(outputTokensDiv);
       statsDiv.appendChild(tokensDiv);
       statsDiv.appendChild(costDiv);
 

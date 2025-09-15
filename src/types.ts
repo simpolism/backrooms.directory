@@ -82,6 +82,8 @@ export interface ModelResponse {
 
 // Cumulative usage tracking for the entire conversation
 export interface ConversationUsage {
+  totalInputTokens: number;
+  totalOutputTokens: number;
   totalTokens: number;
   totalCost: number;
   modelBreakdown: Record<string, UsageData>; // Model display name -> usage
