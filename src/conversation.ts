@@ -223,6 +223,22 @@ export class Conversation {
     );
   }
 
+  /**
+   * Get current max tokens for a model from localStorage
+   */
+  private getCurrentMaxTokens(modelIndex: number): number {
+    const saved = loadFromLocalStorage(`max-tokens-${modelIndex}`, '512');
+    const value = parseInt(saved);
+    return Math.max(1, Math.min(value || 512, 1024));
+  }
+
+  /**
+   * Get current explore mode settings from localStorage
+   */
+  private getCurrentExploreModeSettings(): ExploreModeSettings {
+    return loadFromLocalStorage('exploreModeSettings', {});
+  }
+
   public async start(): Promise<void> {
     // Clean up any existing abort controller
     if (this.abortController) {
@@ -428,7 +444,8 @@ export class Conversation {
     const modelKey = this.models[modelIndex];
     const modelInfo = MODEL_INFO[modelKey];
     const modelName = this.modelDisplayNames[modelIndex];
-    const exploreSetting = this.exploreModeSettings[modelIndex];
+    const currentExploreModeSettings = this.getCurrentExploreModeSettings();
+    const exploreSetting = currentExploreModeSettings[modelIndex];
 
     if (!exploreSetting || !exploreSetting.enabled) {
       throw new Error(`Explore mode is not enabled for model ${modelName}`);
@@ -653,7 +670,8 @@ export class Conversation {
       if (!this.isRunning) break;
 
       // Check if explore mode is enabled for this model
-      const exploreSetting = this.exploreModeSettings[i];
+      const currentExploreModeSettings = this.getCurrentExploreModeSettings();
+      const exploreSetting = currentExploreModeSettings[i];
       const isExploreEnabled = exploreSetting && exploreSetting.enabled;
 
       try {
@@ -665,7 +683,7 @@ export class Conversation {
           // This will wait until a response is selected AND completed
           const result = await this.makeParallelRequests(
             i,
-            this.maxTokensPerModel[i]
+            this.getCurrentMaxTokens(i)
           );
           response = result.response;
           usageData = result.usage;
@@ -729,7 +747,7 @@ export class Conversation {
             this.contexts[i],
             this.systemPrompts[i],
             this.apiKeys,
-            this.maxTokensPerModel[i],
+            this.getCurrentMaxTokens(i),
             i, // Pass the model index
             streamingCallback, // Pass the streaming callback
             this.abortController.signal, // Pass the abort signal
