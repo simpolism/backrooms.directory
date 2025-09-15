@@ -970,13 +970,11 @@ document.addEventListener('DOMContentLoaded', () => {
       (setting) => setting.enabled
     );
 
-    // Only show the container if at least one model has explore mode enabled
-    exploreModeContainer.style.display = isAnyEnabled ? 'block' : 'none';
+    // Check if there are active explore outputs that haven't been selected yet
+    const hasActiveExploreOutputs = exploreModeOutputs.children.length > 0;
 
-    // Make sure the explore mode outputs container is empty when showing
-    if (isAnyEnabled) {
-      exploreModeOutputs.innerHTML = '';
-    }
+    // Show the container if at least one model has explore mode enabled OR if there are active outputs
+    exploreModeContainer.style.display = (isAnyEnabled || hasActiveExploreOutputs) ? 'block' : 'none';
   }
 
   // Handle selection of a response in explore mode
@@ -1037,11 +1035,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Add output to container
       exploreModeOutputs.appendChild(outputElement);
 
-      // Auto-scroll to the new output if auto-scroll is enabled
-      if (autoScrollToggle.checked) {
-        exploreModeOutputs.scrollTop = exploreModeOutputs.scrollHeight;
-      }
-
       // Add click handler to the whole output for selection
       outputElement.addEventListener('click', (e) => {
         // Don't trigger if clicking on the button (it has its own handler)
@@ -1069,11 +1062,6 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         outputElement.classList.remove('selected');
       }
-
-      // Auto-scroll when content is updated if auto-scroll is enabled
-      if (autoScrollToggle.checked) {
-        exploreModeOutputs.scrollTop = exploreModeOutputs.scrollHeight;
-      }
     }
 
     return outputElement;
@@ -1092,6 +1080,11 @@ document.addEventListener('DOMContentLoaded', () => {
         output.classList.remove('selected');
       }
     });
+
+    // Clear explore outputs immediately after selection
+    exploreModeOutputs.innerHTML = '';
+    // Update container visibility now that outputs are cleared
+    updateExploreModeContainerVisibility();
   };
 
   // Create OpenRouter autocomplete field
@@ -1940,6 +1933,10 @@ document.addEventListener('DOMContentLoaded', () => {
       activeConversation.stop();
       addOutputMessage('System', 'Conversation stopped by user.');
     }
+
+    // Clear any pending explore mode choices
+    exploreModeOutputs.innerHTML = '';
+    updateExploreModeContainerVisibility();
   }
 
   // Load conversation from a text file
@@ -2152,35 +2149,6 @@ document.addEventListener('DOMContentLoaded', () => {
     seedInput.disabled = true;
     loadButton.disabled = true;
 
-    // Disable all explore mode toggles and number inputs
-    const exploreToggles = document.querySelectorAll(
-      '[id^="explore-mode-toggle-"]'
-    ) as NodeListOf<HTMLInputElement>;
-    const exploreNumInputs = document.querySelectorAll(
-      '[id^="explore-mode-num-requests-"]'
-    ) as NodeListOf<HTMLInputElement>;
-    const maxTokensInputs = document.querySelectorAll(
-      '[id^="max-tokens-"]'
-    ) as NodeListOf<HTMLInputElement>;
-
-    exploreToggles.forEach((toggle) => {
-      toggle.disabled = true;
-      // Also add disabled class to the parent toggle switch container
-      const toggleContainer = toggle.closest('.toggle-switch');
-      if (toggleContainer) {
-        toggleContainer.classList.add('disabled');
-      }
-    });
-
-    exploreNumInputs.forEach((input) => {
-      input.disabled = true;
-    });
-
-    // Disable all max tokens inputs
-    maxTokensInputs.forEach((input) => {
-      input.disabled = true;
-    });
-
     // Disable model and template dropdowns
     allModelSelects.forEach((select) => {
       select.disabled = true;
@@ -2320,25 +2288,6 @@ document.addEventListener('DOMContentLoaded', () => {
       pauseButton.style.display = 'none';
       resumeButton.style.display = 'none';
       exportButton.style.display = 'block';
-
-      // Re-enable all explore mode toggles and number inputs
-      exploreToggles.forEach((toggle) => {
-        toggle.disabled = false;
-        // Also remove disabled class from the parent toggle switch container
-        const toggleContainer = toggle.closest('.toggle-switch');
-        if (toggleContainer) {
-          toggleContainer.classList.remove('disabled');
-        }
-      });
-
-      exploreNumInputs.forEach((input) => {
-        input.disabled = false;
-      });
-
-      // Re-enable all max tokens inputs
-      maxTokensInputs.forEach((input) => {
-        input.disabled = false;
-      });
 
       // Re-enable model and template dropdowns
       allModelSelects.forEach((select) => {
