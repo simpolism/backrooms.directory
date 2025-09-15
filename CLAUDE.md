@@ -16,7 +16,7 @@ This is **backrooms.directory**, a TypeScript web application that enables AI co
 - **Build for production**: `pnpm build`
 - **Install dependencies**: `pnpm i`
 
-No linting, testing, or typecheck commands are configured - the project relies on TypeScript compilation through webpack.
+No testing, or typecheck commands are configured - the project relies on TypeScript compilation through webpack. Use pnpm throughout instead of npm.
 
 ## Architecture Overview
 
@@ -52,6 +52,7 @@ No linting, testing, or typecheck commands are configured - the project relies o
 ## Template Format
 
 Templates use JSONL (JSON Lines) format where each line defines the context for one model in the conversation:
+
 ```jsonl
 {"system_prompt": "You are AI assistant 1", "context": []}
 {"system_prompt": "You are AI assistant 2", "context": []}

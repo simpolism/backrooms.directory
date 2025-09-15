@@ -15,7 +15,7 @@ export function generateCodeVerifier(): string {
   // Generate a random string of 43-128 characters
   const array = new Uint8Array(64); // 64 bytes = 512 bits
   crypto.getRandomValues(array);
-  
+
   // Convert to base64url and ensure length is between 43-128 characters
   return base64UrlEncode(array.buffer).substring(0, 128);
 }
@@ -25,12 +25,14 @@ export function generateCodeVerifier(): string {
  * @param codeVerifier The code verifier to hash
  * @returns A base64url encoded SHA-256 hash of the code verifier
  */
-export async function createCodeChallenge(codeVerifier: string): Promise<string> {
+export async function createCodeChallenge(
+  codeVerifier: string
+): Promise<string> {
   // Create a SHA-256 hash of the code verifier
   const encoder = new TextEncoder();
   const data = encoder.encode(codeVerifier);
   const hash = await crypto.subtle.digest('SHA-256', data);
-  
+
   // Convert the hash to base64url encoding
   return base64UrlEncode(hash);
 }
@@ -44,15 +46,12 @@ function base64UrlEncode(buffer: ArrayBuffer): string {
   // Convert ArrayBuffer to base64
   const base64 = btoa(
     Array.from(new Uint8Array(buffer))
-      .map(b => String.fromCharCode(b))
+      .map((b) => String.fromCharCode(b))
       .join('')
   );
-  
+
   // Convert base64 to base64url
-  return base64
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 /**
@@ -87,16 +86,16 @@ export async function initiateOAuthFlow(): Promise<void> {
     // Generate code verifier and challenge
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await createCodeChallenge(codeVerifier);
-    
+
     // Store the code verifier for later use
     storeCodeVerifier(codeVerifier);
-    
+
     // Build the authorization URL
     const authUrl = new URL(OPENROUTER_AUTH_URL);
     authUrl.searchParams.append('callback_url', window.location.href);
     authUrl.searchParams.append('code_challenge', codeChallenge);
     authUrl.searchParams.append('code_challenge_method', 'S256');
-    
+
     // Redirect to OpenRouter
     window.location.href = authUrl.toString();
   } catch (error) {
@@ -117,7 +116,7 @@ export async function exchangeCodeForKey(code: string): Promise<string> {
     if (!codeVerifier) {
       throw new Error('Code verifier not found. Please try again.');
     }
-    
+
     // Exchange the code for an API key
     const response = await fetch(OPENROUTER_TOKEN_URL, {
       method: 'POST',
@@ -130,17 +129,19 @@ export async function exchangeCodeForKey(code: string): Promise<string> {
         code_challenge_method: 'S256',
       }),
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Failed to exchange code for key: ${response.status} ${response.statusText} ${JSON.stringify(errorData)}`);
+      throw new Error(
+        `Failed to exchange code for key: ${response.status} ${response.statusText} ${JSON.stringify(errorData)}`
+      );
     }
-    
+
     const data = await response.json();
-    
+
     // Clear the code verifier as it's no longer needed
     clearCodeVerifier();
-    
+
     // Return the API key
     return data.key;
   } catch (error) {
@@ -183,13 +184,13 @@ export async function handleOAuthCallback(
     if (!code) {
       return; // No code found, not a callback
     }
-    
+
     // Clean up the URL
     cleanupUrl();
-    
+
     // Exchange the code for an API key
     const apiKey = await exchangeCodeForKey(code);
-    
+
     // Call the success callback
     onSuccess(apiKey);
   } catch (error) {

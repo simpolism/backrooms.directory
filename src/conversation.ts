@@ -8,7 +8,7 @@ import {
   ParallelResponse,
   SelectionCallback,
   ModelResponse,
-  UsageData
+  UsageData,
 } from './types';
 import { MODEL_INFO } from './models';
 import {
@@ -28,22 +28,28 @@ export async function updateOpenRouterCostAsync(
 ): Promise<void> {
   try {
     // Wait for the generation data to be available in OpenRouter's system
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const preciseCost = await getOpenRouterGenerationCost(generationId, apiKeys.openrouterApiKey);
+    const preciseCost = await getOpenRouterGenerationCost(
+      generationId,
+      apiKeys.openrouterApiKey
+    );
 
     if (preciseCost !== null && usageCallback) {
       // Create updated usage data with precise cost
       const updatedUsage: UsageData = {
         ...originalUsage,
-        cost: preciseCost
+        cost: preciseCost,
       };
 
       // Call the usage callback with the updated cost
       usageCallback(modelDisplayName, updatedUsage);
     }
   } catch (error) {
-    console.warn('Failed to fetch precise cost from OpenRouter generations API:', error);
+    console.warn(
+      'Failed to fetch precise cost from OpenRouter generations API:',
+      error
+    );
   }
 }
 
@@ -62,7 +68,7 @@ export async function generateModelResponse(
 ): Promise<ModelResponse> {
   // Determine which API to use based on the company
   const company = modelInfo.company;
-  
+
   if (company === 'hyperbolic_completion') {
     const result = await hyperbolicCompletionConversation(
       actor,
@@ -81,7 +87,10 @@ export async function generateModelResponse(
     let apiName = modelInfo.api_name;
 
     if (modelInfo.is_custom_selector && modelIndex !== undefined) {
-      const savedModel = loadFromLocalStorage(`openrouter_custom_model_${modelIndex}`, null);
+      const savedModel = loadFromLocalStorage(
+        `openrouter_custom_model_${modelIndex}`,
+        null
+      );
       if (savedModel) {
         try {
           const savedModelData = JSON.parse(savedModel);
@@ -115,7 +124,7 @@ export async function generateModelResponse(
         result.usage,
         apiKeys,
         usageCallback
-      ).catch(error => {
+      ).catch((error) => {
         console.warn('Async cost update failed:', error);
       });
     }
@@ -132,7 +141,12 @@ export class Conversation {
   private systemPrompts: (string | null)[];
   private contexts: Message[][];
   private apiKeys: ApiKeys;
-  private outputCallback: (actor: string, response: string, elementId?: string, isLoading?: boolean) => void;
+  private outputCallback: (
+    actor: string,
+    response: string,
+    elementId?: string,
+    isLoading?: boolean
+  ) => void;
   private isRunning: boolean = false;
   private isPaused: boolean = false; // New state for pause functionality
   private maxTurns: number;
@@ -141,7 +155,7 @@ export class Conversation {
   private currentTurn: number = 0;
   private currentResponses: Map<string, string> = new Map(); // Track responses for each model
   private abortController: AbortController | null = null; // For cancelling API requests
-  
+
   // Explore mode properties
   private exploreModeSettings: ExploreModeSettings;
   private selectionCallback: SelectionCallback | null = null;
@@ -150,9 +164,14 @@ export class Conversation {
   private selectedResponseId: string | null = null; // Track which response was selected
   private exploreAbortControllers: Map<string, AbortController> = new Map(); // For cancelling parallel requests
   private selectedMainOutputId: string | null = null; // Track the ID for the selected response in the main output
-  private selectedMainOutputContent: string = ""; // Track the content for the selected response in the main output
+  private selectedMainOutputContent: string = ''; // Track the content for the selected response in the main output
   private usageCallback?: (modelDisplayName: string, usage: UsageData) => void; // Callback for usage tracking
-  private currentExploreUsage: UsageData = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 }; // Track usage for current explore mode
+  private currentExploreUsage: UsageData = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    cost: 0,
+  }; // Track usage for current explore mode
 
   constructor(
     models: string[],
@@ -161,7 +180,12 @@ export class Conversation {
     apiKeys: ApiKeys,
     maxTurns: number = Infinity,
     maxTokensPerModel: number[] | number = 1024,
-    outputCallback: (actor: string, response: string, elementId?: string, isLoading?: boolean) => void,
+    outputCallback: (
+      actor: string,
+      response: string,
+      elementId?: string,
+      isLoading?: boolean
+    ) => void,
     seed?: number,
     exploreModeSettings: ExploreModeSettings = {},
     selectionCallback: SelectionCallback | null = null,
@@ -172,7 +196,7 @@ export class Conversation {
     this.contexts = contexts;
     this.apiKeys = apiKeys;
     this.maxTurns = maxTurns;
-    
+
     // Handle both array and single number for backward compatibility
     if (Array.isArray(maxTokensPerModel)) {
       this.maxTokensPerModel = maxTokensPerModel;
@@ -180,20 +204,22 @@ export class Conversation {
       // If a single number is provided, create an array with the same value for all models
       this.maxTokensPerModel = Array(models.length).fill(maxTokensPerModel);
     }
-    
+
     this.outputCallback = outputCallback;
     this.seed = seed;
     this.exploreModeSettings = exploreModeSettings;
     this.selectionCallback = selectionCallback;
     this.usageCallback = usageCallback;
-    
+
     // Generate model display names
     this.modelDisplayNames = models.map((model, index) => {
       return `${MODEL_INFO[model].display_name} ${index + 1}`;
     });
-    
+
     // Check if explore mode is enabled for any model
-    this.isExploreMode = Object.values(exploreModeSettings).some(setting => setting.enabled);
+    this.isExploreMode = Object.values(exploreModeSettings).some(
+      (setting) => setting.enabled
+    );
   }
 
   public async start(): Promise<void> {
@@ -202,25 +228,22 @@ export class Conversation {
       this.abortController.abort();
       this.abortController = null;
     }
-    
+
     this.isRunning = true;
     this.currentTurn = 0;
-    
+
     while (this.isRunning && this.currentTurn < this.maxTurns) {
       await this.processTurn();
       this.currentTurn++;
     }
-    
-    this.outputCallback(
-      'System',
-      `Conversation ended.`
-    );
+
+    this.outputCallback('System', `Conversation ended.`);
   }
 
   public stop(): void {
     this.isRunning = false;
     this.isPaused = false;
-    
+
     // Cancel any in-progress API requests
     if (this.abortController) {
       this.abortController.abort();
@@ -243,7 +266,7 @@ export class Conversation {
   public isPausedState(): boolean {
     return this.isPaused;
   }
-  
+
   /**
    * Handles selection of a response in explore mode
    * @param responseId The ID of the selected response
@@ -254,47 +277,49 @@ export class Conversation {
       console.error(`Response with ID ${responseId} not found`);
       return;
     }
-    
+
     // Mark this response as selected
     this.selectedResponseId = responseId;
-    
+
     // Get the selected response
     const selectedResponse = this.parallelResponses.get(responseId);
-    
+
     // Update all responses to reflect selection
     for (const [id, response] of this.parallelResponses.entries()) {
       const isSelected = id === responseId;
       this.parallelResponses.set(id, {
         ...response,
-        isSelected
+        isSelected,
       });
-      
+
       // Cancel all other requests
       if (!isSelected && this.exploreAbortControllers.has(id)) {
         this.exploreAbortControllers.get(id)?.abort();
         this.exploreAbortControllers.delete(id);
       }
     }
-    
+
     // Extract model index from responseId
     // Format is "explore-timestamp-modelIndex-optionNumber"
     const parts = responseId.split('-');
     let modelIndex = 0;
-    
+
     if (parts.length >= 4) {
       try {
         modelIndex = parseInt(parts[2]);
       } catch (e) {
-        console.error("Error parsing responseId parts:", e);
+        console.error('Error parsing responseId parts:', e);
       }
     }
-    
+
     // Create a unique ID for this response in the main output
     this.selectedMainOutputId = `main-output-${Date.now()}`;
-    
+
     // Initialize the content with what we have so far
-    this.selectedMainOutputContent = selectedResponse ? selectedResponse.content : "";
-    
+    this.selectedMainOutputContent = selectedResponse
+      ? selectedResponse.content
+      : '';
+
     // If the response is already complete, output it to the main output window immediately
     // Otherwise, the streaming callback will handle it
     if (selectedResponse && selectedResponse.isComplete) {
@@ -305,80 +330,83 @@ export class Conversation {
         false
       );
     }
-    
+
     // Notify the selection callback if provided
     if (this.selectionCallback) {
       this.selectionCallback(responseId);
     }
   }
-  
+
   /**
    * Creates a streaming callback for explore mode
    * @param responseId The ID of the response
    * @returns A streaming callback function
    */
-  private createExploreStreamingCallback(responseId: string): StreamingCallback {
+  private createExploreStreamingCallback(
+    responseId: string
+  ): StreamingCallback {
     return (chunk: string, isDone: boolean) => {
       if (!this.isRunning) {
         return;
       }
-      
+
       // Get current response
       const response = this.parallelResponses.get(responseId);
       if (!response) {
         return;
       }
-      
+
       // Update content
       const updatedContent = response.content + chunk;
-      
+
       // Update response in map
       this.parallelResponses.set(responseId, {
         ...response,
         content: updatedContent,
-        isComplete: isDone
+        isComplete: isDone,
       });
-      
+
       // Extract model index and option number from responseId
       // Format is "explore-timestamp-modelIndex-optionNumber"
       const parts = responseId.split('-');
       let modelIndex = 0;
       let optionNumber = 0;
-      
+
       if (parts.length >= 4) {
         try {
           modelIndex = parseInt(parts[2]);
           optionNumber = parseInt(parts[3]);
         } catch (e) {
-          console.error("Error parsing responseId parts:", e);
+          console.error('Error parsing responseId parts:', e);
         }
       }
-      
-      const modelName = modelIndex < this.modelDisplayNames.length ?
-        this.modelDisplayNames[modelIndex] :
-        `Model ${modelIndex + 1}`;
-      
+
+      const modelName =
+        modelIndex < this.modelDisplayNames.length
+          ? this.modelDisplayNames[modelIndex]
+          : `Model ${modelIndex + 1}`;
+
       // Always update the explore window with cursor
       this.outputCallback(
         `${modelName}`,
-        updatedContent + (isDone ? "" : "█"),
+        updatedContent + (isDone ? '' : '█'),
         responseId,
         false
       );
-      
+
       // If this is the selected response, also update the main output window with cursor
       if (response.isSelected && this.selectedMainOutputId) {
         // Update the accumulated content
         this.selectedMainOutputContent = updatedContent;
-        
+
         // Update the main output window with cursor
         this.outputCallback(
           modelName,
-          this.selectedMainOutputContent + (isDone ? "" : "█"),
+          this.selectedMainOutputContent + (isDone ? '' : '█'),
           this.selectedMainOutputId,
           false
         );
-        
+
         // Notify the selection callback if provided
         if (this.selectionCallback) {
           this.selectionCallback(responseId);
@@ -386,24 +414,27 @@ export class Conversation {
       }
     };
   }
-  
+
   /**
    * Makes parallel requests for explore mode
    * @param modelIndex The index of the model
    * @returns The selected response content and usage data
    */
-  private async makeParallelRequests(modelIndex: number, maxTokens: number): Promise<{ response: string; usage?: UsageData }> {
+  private async makeParallelRequests(
+    modelIndex: number,
+    maxTokens: number
+  ): Promise<{ response: string; usage?: UsageData }> {
     const modelKey = this.models[modelIndex];
     const modelInfo = MODEL_INFO[modelKey];
     const modelName = this.modelDisplayNames[modelIndex];
     const exploreSetting = this.exploreModeSettings[modelIndex];
-    
+
     if (!exploreSetting || !exploreSetting.enabled) {
       throw new Error(`Explore mode is not enabled for model ${modelName}`);
     }
-    
+
     const numRequests = exploreSetting.numRequests;
-    
+
     // Clear the explore mode outputs container by sending a special message
     // This ensures the UI is cleared before new parallel requests start
     const clearContainerId = `clear-explore-outputs-${Date.now()}`;
@@ -413,19 +444,19 @@ export class Conversation {
       clearContainerId,
       true
     );
-    
+
     // Reset parallel responses and selected response
     this.parallelResponses.clear();
     this.selectedResponseId = null;
     this.selectedMainOutputId = null;
-    this.selectedMainOutputContent = "";
+    this.selectedMainOutputContent = '';
 
     // Reset explore usage tracking
     this.currentExploreUsage = {
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
-      cost: 0
+      cost: 0,
     };
 
     // Clear any existing abort controllers
@@ -436,26 +467,26 @@ export class Conversation {
 
     // Create promises for parallel requests
     const requestPromises: Promise<void>[] = [];
-    
+
     // Create parallel responses
     for (let i = 0; i < numRequests; i++) {
       const responseId = `explore-${Date.now()}-${modelIndex}-${i}`;
-      
+
       // Initialize response
       this.parallelResponses.set(responseId, {
         id: responseId,
-        content: "",
+        content: '',
         isSelected: false,
-        isComplete: false
+        isComplete: false,
       });
-      
+
       // Create abort controller for this request
       const abortController = new AbortController();
       this.exploreAbortControllers.set(responseId, abortController);
-      
+
       // Create streaming callback
       const streamingCallback = this.createExploreStreamingCallback(responseId);
-      
+
       // Make the request
       const requestPromise = generateModelResponse(
         modelInfo,
@@ -469,67 +500,36 @@ export class Conversation {
         abortController.signal,
         this.seed ? this.seed + i : undefined, // Use different seeds for diversity
         this.usageCallback
-      ).then(modelResponse => {
-        // Accumulate usage data from this response
-        if (modelResponse.usage) {
-          this.currentExploreUsage.promptTokens += modelResponse.usage.promptTokens;
-          this.currentExploreUsage.completionTokens += modelResponse.usage.completionTokens;
-          this.currentExploreUsage.totalTokens += modelResponse.usage.totalTokens;
-          this.currentExploreUsage.cost = (this.currentExploreUsage.cost || 0) + (modelResponse.usage.cost || 0);
-        }
-
-        // Mark as complete
-        const currentResponse = this.parallelResponses.get(responseId);
-        if (currentResponse) {
-          this.parallelResponses.set(responseId, {
-            ...currentResponse,
-            content: modelResponse.content,
-            isComplete: true,
-            usage: modelResponse.usage
-          });
-          
-          // If this is the selected response, update the main output window with the final content
-          if (currentResponse.isSelected && this.selectedMainOutputId) {
-            // Update the accumulated content
-            this.selectedMainOutputContent = modelResponse.content;
-
-            // Final update without cursor
-            this.outputCallback(
-              this.modelDisplayNames[modelIndex],
-              this.selectedMainOutputContent,
-              this.selectedMainOutputId,
-              false
-            );
-            
-            // If we have a selection callback, notify it
-            if (this.selectionCallback) {
-              this.selectionCallback(responseId);
-            }
+      )
+        .then((modelResponse) => {
+          // Accumulate usage data from this response
+          if (modelResponse.usage) {
+            this.currentExploreUsage.promptTokens +=
+              modelResponse.usage.promptTokens;
+            this.currentExploreUsage.completionTokens +=
+              modelResponse.usage.completionTokens;
+            this.currentExploreUsage.totalTokens +=
+              modelResponse.usage.totalTokens;
+            this.currentExploreUsage.cost =
+              (this.currentExploreUsage.cost || 0) +
+              (modelResponse.usage.cost || 0);
           }
-        }
-      }).catch(error => {
-        console.error(`Error in parallel request ${i} for ${modelName}:`, error);
 
-        // If this was a cancelled request, just log it
-        if (error instanceof Error && error.message === 'Request cancelled') {
-          console.log(`Request ${i} for ${modelName} was cancelled`);
-        } else {
-          // For other errors, update the response with an error message
+          // Mark as complete
           const currentResponse = this.parallelResponses.get(responseId);
           if (currentResponse) {
-            const errorMessage = `Error: ${error instanceof Error ? error.message : String(error)}`;
-            
             this.parallelResponses.set(responseId, {
               ...currentResponse,
-              content: errorMessage,
-              isComplete: true
+              content: modelResponse.content,
+              isComplete: true,
+              usage: modelResponse.usage,
             });
-            
-            // If this is the selected response, update the main output window with the error
+
+            // If this is the selected response, update the main output window with the final content
             if (currentResponse.isSelected && this.selectedMainOutputId) {
               // Update the accumulated content
-              this.selectedMainOutputContent = errorMessage;
-              
+              this.selectedMainOutputContent = modelResponse.content;
+
               // Final update without cursor
               this.outputCallback(
                 this.modelDisplayNames[modelIndex],
@@ -537,74 +537,124 @@ export class Conversation {
                 this.selectedMainOutputId,
                 false
               );
-              
+
               // If we have a selection callback, notify it
               if (this.selectionCallback) {
                 this.selectionCallback(responseId);
               }
             }
           }
-        }
-      });
-      
+        })
+        .catch((error) => {
+          console.error(
+            `Error in parallel request ${i} for ${modelName}:`,
+            error
+          );
+
+          // If this was a cancelled request, just log it
+          if (error instanceof Error && error.message === 'Request cancelled') {
+            console.log(`Request ${i} for ${modelName} was cancelled`);
+          } else {
+            // For other errors, update the response with an error message
+            const currentResponse = this.parallelResponses.get(responseId);
+            if (currentResponse) {
+              const errorMessage = `Error: ${error instanceof Error ? error.message : String(error)}`;
+
+              this.parallelResponses.set(responseId, {
+                ...currentResponse,
+                content: errorMessage,
+                isComplete: true,
+              });
+
+              // If this is the selected response, update the main output window with the error
+              if (currentResponse.isSelected && this.selectedMainOutputId) {
+                // Update the accumulated content
+                this.selectedMainOutputContent = errorMessage;
+
+                // Final update without cursor
+                this.outputCallback(
+                  this.modelDisplayNames[modelIndex],
+                  this.selectedMainOutputContent,
+                  this.selectedMainOutputId,
+                  false
+                );
+
+                // If we have a selection callback, notify it
+                if (this.selectionCallback) {
+                  this.selectionCallback(responseId);
+                }
+              }
+            }
+          }
+        });
+
       requestPromises.push(requestPromise);
     }
-    
-    // Wait for user to select a response AND for it to complete
-    return new Promise<{ response: string; usage?: UsageData }>((resolve, reject) => {
-      // Create a function to check if a response has been selected and completed
-      const checkSelectionAndCompletion = () => {
-        if (this.selectedResponseId) {
-          const selectedResponse = this.parallelResponses.get(this.selectedResponseId);
-          if (selectedResponse) {
-            // Only resolve if the selected response is complete
-            if (selectedResponse.isComplete) {
-              resolve({
-                response: selectedResponse.content,
-                usage: this.currentExploreUsage.totalTokens > 0 ? this.currentExploreUsage : undefined
-              });
-            } else {
-              // If selected but not complete, check again in 200ms
-              setTimeout(checkSelectionAndCompletion, 200);
-            }
-          } else {
-            console.error("Selected response not found in parallelResponses map");
-            reject(new Error('Selected response not found'));
-          }
-        } else if (!this.isRunning) {
-          reject(new Error('Conversation stopped'));
-        } else {
-          // No selection yet, check again in 200ms
-          setTimeout(checkSelectionAndCompletion, 200);
-        }
-      };
 
-      // Start checking for selection and completion
-      checkSelectionAndCompletion();
-    });
+    // Wait for user to select a response AND for it to complete
+    return new Promise<{ response: string; usage?: UsageData }>(
+      (resolve, reject) => {
+        // Create a function to check if a response has been selected and completed
+        const checkSelectionAndCompletion = () => {
+          if (this.selectedResponseId) {
+            const selectedResponse = this.parallelResponses.get(
+              this.selectedResponseId
+            );
+            if (selectedResponse) {
+              // Only resolve if the selected response is complete
+              if (selectedResponse.isComplete) {
+                resolve({
+                  response: selectedResponse.content,
+                  usage:
+                    this.currentExploreUsage.totalTokens > 0
+                      ? this.currentExploreUsage
+                      : undefined,
+                });
+              } else {
+                // If selected but not complete, check again in 200ms
+                setTimeout(checkSelectionAndCompletion, 200);
+              }
+            } else {
+              console.error(
+                'Selected response not found in parallelResponses map'
+              );
+              reject(new Error('Selected response not found'));
+            }
+          } else if (!this.isRunning) {
+            reject(new Error('Conversation stopped'));
+          } else {
+            // No selection yet, check again in 200ms
+            setTimeout(checkSelectionAndCompletion, 200);
+          }
+        };
+
+        // Start checking for selection and completion
+        checkSelectionAndCompletion();
+      }
+    );
   }
 
   private async processTurn(): Promise<void> {
     // Create a new AbortController for this turn
     this.abortController = new AbortController();
-    
+
     for (let i = 0; i < this.models.length; i++) {
       if (!this.isRunning) break;
-      
+
       // Check if conversation is paused before starting a new API request
       // This ensures we don't start new requests while paused
       while (this.isPaused && this.isRunning) {
         // Wait while paused
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
-      
+
       // If we're no longer running after pause, break out
       if (!this.isRunning) break;
-      
+
       // Check if explore mode is enabled for this model
       const exploreSetting = this.exploreModeSettings[i];
       const isExploreEnabled = exploreSetting && exploreSetting.enabled;
-      
+
       try {
         let response: string;
         let usageData: UsageData | undefined;
@@ -612,7 +662,10 @@ export class Conversation {
         if (isExploreEnabled) {
           // Use explore mode with parallel requests
           // This will wait until a response is selected AND completed
-          const result = await this.makeParallelRequests(i, this.maxTokensPerModel[i]);
+          const result = await this.makeParallelRequests(
+            i,
+            this.maxTokensPerModel[i]
+          );
           response = result.response;
           usageData = result.usage;
 
@@ -621,32 +674,50 @@ export class Conversation {
         } else {
           // Create a unique ID for this response
           const responseId = `response-${Date.now()}-${i}`;
-          
+
           // Initialize empty response with retro cursor
-          this.currentResponses.set(responseId, "");
-          this.outputCallback(this.modelDisplayNames[i], "█", responseId, false);
-          
+          this.currentResponses.set(responseId, '');
+          this.outputCallback(
+            this.modelDisplayNames[i],
+            '█',
+            responseId,
+            false
+          );
+
           // Create streaming callback for this model
-          const streamingCallback: StreamingCallback = (chunk: string, isDone: boolean) => {
+          const streamingCallback: StreamingCallback = (
+            chunk: string,
+            isDone: boolean
+          ) => {
             if (!this.isRunning) return;
-            
+
             // Get current accumulated response
-            let currentResponse = this.currentResponses.get(responseId) || "";
-            
+            let currentResponse = this.currentResponses.get(responseId) || '';
+
             if (isDone) {
               // Final update without cursor
-              this.outputCallback(this.modelDisplayNames[i], currentResponse, responseId, false);
+              this.outputCallback(
+                this.modelDisplayNames[i],
+                currentResponse,
+                responseId,
+                false
+              );
             } else {
               // Update with new chunk and cursor
               currentResponse += chunk;
               this.currentResponses.set(responseId, currentResponse);
-              
+
               // Always update the UI with new chunks, even when paused
               // This ensures ongoing API requests continue to display output
-              this.outputCallback(this.modelDisplayNames[i], currentResponse + "█", responseId, false);
+              this.outputCallback(
+                this.modelDisplayNames[i],
+                currentResponse + '█',
+                responseId,
+                false
+              );
             }
           };
-          
+
           // Store original usage data for comparison
           const originalUsageData = usageData;
 
@@ -681,18 +752,18 @@ export class Conversation {
           this.stop();
           return;
         }
-        
+
         // Add response to all contexts
         for (let j = 0; j < this.contexts.length; j++) {
           const role = j === i ? 'assistant' : 'user';
           this.contexts[j].push({ role, content: response });
         }
-        
+
         // Check if conversation is paused after completing this model's request
         // This ensures we don't immediately proceed to the next model while paused
         while (this.isPaused && this.isRunning) {
           // Wait while paused
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
       } catch (error) {
         // Check if this was a cancelled request
@@ -710,7 +781,7 @@ export class Conversation {
         }
       }
     }
-    
+
     // Clean up the abort controller after the turn is complete
     this.abortController = null;
   }

@@ -21,15 +21,15 @@ export async function loadTemplate(
 ): Promise<TemplateConfig[]> {
   try {
     let text: string;
-    
+
     // Check if this is the custom template
     if (templateName === 'custom') {
       const customTemplate = getCustomTemplate();
-      
+
       if (!customTemplate) {
         throw new Error('Custom template not found.');
       }
-      
+
       text = customTemplate.content;
     } else {
       // Load built-in template
@@ -40,43 +40,55 @@ export async function loadTemplate(
       text = await response.text();
     }
     const lines = text.trim().split('\n');
-    const configs: TemplateConfig[] = lines.map(line => JSON.parse(line));
-    
+    const configs: TemplateConfig[] = lines.map((line) => JSON.parse(line));
+
     const companies: string[] = [];
     const actors: string[] = [];
-    
+
     for (let i = 0; i < models.length; i++) {
       companies.push(MODEL_INFO[models[i]].company);
-      actors.push(`${MODEL_INFO[models[i]].display_name} ${i+1}`);
+      actors.push(`${MODEL_INFO[models[i]].display_name} ${i + 1}`);
     }
-    
+
     for (let i = 0; i < configs.length; i++) {
       // Format system prompts and context with actor and company names
       if (configs[i].system_prompt) {
         let formattedPrompt = configs[i].system_prompt;
-        
+
         // Replace placeholders
         for (let j = 0; j < companies.length; j++) {
-          formattedPrompt = formattedPrompt.replace(new RegExp(`\\{lm${j+1}_company\\}`, 'g'), companies[j]);
-          formattedPrompt = formattedPrompt.replace(new RegExp(`\\{lm${j+1}_actor\\}`, 'g'), actors[j]);
+          formattedPrompt = formattedPrompt.replace(
+            new RegExp(`\\{lm${j + 1}_company\\}`, 'g'),
+            companies[j]
+          );
+          formattedPrompt = formattedPrompt.replace(
+            new RegExp(`\\{lm${j + 1}_actor\\}`, 'g'),
+            actors[j]
+          );
         }
-        
+
         configs[i].system_prompt = formattedPrompt;
       }
-      
+
       // Format context messages
       for (const message of configs[i].context) {
         let formattedContent = message.content;
-        
+
         // Replace placeholders
         for (let j = 0; j < companies.length; j++) {
-          formattedContent = formattedContent.replace(new RegExp(`\\{lm${j+1}_company\\}`, 'g'), companies[j]);
-          formattedContent = formattedContent.replace(new RegExp(`\\{lm${j+1}_actor\\}`, 'g'), actors[j]);
+          formattedContent = formattedContent.replace(
+            new RegExp(`\\{lm${j + 1}_company\\}`, 'g'),
+            companies[j]
+          );
+          formattedContent = formattedContent.replace(
+            new RegExp(`\\{lm${j + 1}_actor\\}`, 'g'),
+            actors[j]
+          );
         }
-        
+
         message.content = formattedContent;
       }
-      
+
       // OpenAI models need system prompt in a different format
       if (
         models[i] in MODEL_INFO &&
@@ -84,7 +96,7 @@ export async function loadTemplate(
         configs[i].system_prompt
       ) {
         let systemPromptAdded = false;
-        
+
         for (const message of configs[i].context) {
           if (message.role === 'user') {
             message.content = `<SYSTEM>${configs[i].system_prompt}</SYSTEM>\n\n${message.content}`;
@@ -92,16 +104,16 @@ export async function loadTemplate(
             break;
           }
         }
-        
+
         if (!systemPromptAdded) {
           configs[i].context.push({
             role: 'user',
-            content: `<SYSTEM>${configs[i].system_prompt}</SYSTEM>`
+            content: `<SYSTEM>${configs[i].system_prompt}</SYSTEM>`,
           });
         }
       }
     }
-    
+
     return configs;
   } catch (error) {
     console.error(`Error loading template: ${error}`);
@@ -122,21 +134,21 @@ export async function getAvailableTemplates(): Promise<TemplateInfo[]> {
     if (!response.ok) {
       throw new Error('Could not fetch template list');
     }
-    
+
     const data = await response.json();
-    
+
     // Handle both old and new format for backward compatibility
     if (Array.isArray(data.templates)) {
       // Old format: just an array of template names
       return data.templates.map((name: string) => ({
         name,
-        description: '' // No description available
+        description: '', // No description available
       }));
     } else {
       // New format: object with template names as keys and descriptions as values
       return Object.entries(data.templates).map(([name, description]) => ({
         name,
-        description: description as string
+        description: description as string,
       }));
     }
   } catch (error) {

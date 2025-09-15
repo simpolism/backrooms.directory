@@ -19,7 +19,7 @@ async function withRetry<T>(
       return await fn();
     } catch (error) {
       lastError = error as Error;
-      
+
       // Don't retry if this is an abort error (request was cancelled)
       // or if the error has the noRetry flag set
       if (
@@ -29,19 +29,19 @@ async function withRetry<T>(
         console.log('Not retrying due to error type or noRetry flag');
         throw error;
       }
-      
+
       // If we've exhausted our retries, throw the error
       if (retries === maxRetries) {
         console.error(`Failed after ${retries + 1} attempts:`, error);
         throw error;
       }
-      
+
       // Calculate delay with exponential backoff (500ms, 1000ms, etc.)
       const delay = initialDelay * Math.pow(2, retries);
       console.log(`Attempt ${retries + 1} failed, retrying in ${delay}ms...`);
-      
+
       // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
       retries++;
     }
   }
@@ -86,10 +86,16 @@ async function processStream(
               if (data.choices[0].text) {
                 // Hyperbolic completion format
                 content = data.choices[0].text;
-              } else if (data.choices[0].delta && data.choices[0].delta.content) {
+              } else if (
+                data.choices[0].delta &&
+                data.choices[0].delta.content
+              ) {
                 // OpenRouter streaming format (newer API versions)
                 content = data.choices[0].delta.content;
-              } else if (data.choices[0].message && data.choices[0].message.content) {
+              } else if (
+                data.choices[0].message &&
+                data.choices[0].message.content
+              ) {
                 // OpenRouter format (older API versions)
                 content = data.choices[0].message.content;
               }
@@ -100,7 +106,7 @@ async function processStream(
               usage = {
                 promptTokens: data.usage.prompt_tokens || 0,
                 completionTokens: data.usage.completion_tokens || 0,
-                totalTokens: data.usage.total_tokens || 0
+                totalTokens: data.usage.total_tokens || 0,
               };
             }
 
@@ -149,8 +155,8 @@ export async function openrouterConversation(
   abortSignal?: AbortSignal,
   seed?: number
 ): Promise<ModelResponse> {
-  const messages = context.map(m => ({ role: m.role, content: m.content }));
-  
+  const messages = context.map((m) => ({ role: m.role, content: m.content }));
+
   // Add system prompt if provided
   if (systemPrompt) {
     messages.unshift({ role: 'system', content: systemPrompt });
@@ -164,7 +170,7 @@ export async function openrouterConversation(
     stream: true,
     usage: { include: true }, // Request usage data in response
   };
-  
+
   // Add seed if provided
   if (seed !== undefined) {
     requestBody.seed = seed;
@@ -185,20 +191,25 @@ export async function openrouterConversation(
 
   return withRetry(async () => {
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${openrouterKey}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'backrooms.directory'
-        },
-        body: JSON.stringify(requestBody),
-        signal: abortSignal
-      });
+      const response = await fetch(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${openrouterKey}`,
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'backrooms.directory',
+          },
+          body: JSON.stringify(requestBody),
+          signal: abortSignal,
+        }
+      );
 
       if (!response.ok) {
-        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `OpenRouter API error: ${response.status} ${response.statusText}`
+        );
       }
 
       // Process the stream
@@ -207,23 +218,29 @@ export async function openrouterConversation(
         const result = await processStream(reader, onChunkWrapper);
         return {
           content: result.content,
-          usage: result.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          generationId: result.generationId
+          usage: result.usage || {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+          },
+          generationId: result.generationId,
         };
       } else {
         // Fallback to non-streaming for backward compatibility
         const data = await response.json();
         hasStartedReceivingResponse = true;
-        const usage: UsageData = data.usage ? {
-          promptTokens: data.usage.prompt_tokens || 0,
-          completionTokens: data.usage.completion_tokens || 0,
-          totalTokens: data.usage.total_tokens || 0
-        } : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+        const usage: UsageData = data.usage
+          ? {
+              promptTokens: data.usage.prompt_tokens || 0,
+              completionTokens: data.usage.completion_tokens || 0,
+              totalTokens: data.usage.total_tokens || 0,
+            }
+          : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
         return {
           content: data.choices[0].message.content,
           usage,
-          generationId: data.id
+          generationId: data.id,
         };
       }
     } catch (error) {
@@ -232,16 +249,22 @@ export async function openrouterConversation(
         console.log('OpenRouter API request was cancelled');
         throw new Error('Request cancelled');
       }
-      
+
       // If we've already started receiving a response, don't retry
       if (hasStartedReceivingResponse) {
-        console.error('Error during OpenRouter API streaming (not retrying):', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const noRetryError = new Error(`OpenRouter API error (response already started): ${errorMessage}`);
+        console.error(
+          'Error during OpenRouter API streaming (not retrying):',
+          error
+        );
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        const noRetryError = new Error(
+          `OpenRouter API error (response already started): ${errorMessage}`
+        );
         (noRetryError as NoRetryError).noRetry = true;
         throw noRetryError;
       }
-      
+
       console.error('Error calling OpenRouter API (will retry):', error);
       throw error;
     }
@@ -260,31 +283,34 @@ export async function hyperbolicCompletionConversation(
   seed?: number
 ): Promise<ModelResponse> {
   // Format messages into a chat-like completion prompt, as 405-base does not support chat completion
-  let prompt = "";
+  let prompt = '';
   if (systemPrompt) {
     prompt += `System: ${systemPrompt}\n\n`;
   }
 
-  for (const message of context.map(m => ({ role: m.role, content: m.content }))) {
+  for (const message of context.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }))) {
     prompt += `${message.role}: ${message.content}\n\n`;
   }
 
-  prompt += "assistant: ";
+  prompt += 'assistant: ';
 
   const headers = {
-    'Authorization': `Bearer ${hyperbolicKey}`,
-    'Content-Type': 'application/json'
+    Authorization: `Bearer ${hyperbolicKey}`,
+    'Content-Type': 'application/json',
   };
-  
+
   const payload: any = {
     model,
     temperature: 1.0,
     max_tokens: maxTokens,
     prompt,
-    stop: ["System:", "system:", "User:", "Assistant:", "user:", "assistant:"],
+    stop: ['System:', 'system:', 'User:', 'Assistant:', 'user:', 'assistant:'],
     stream: true,
   };
-  
+
   // Add seed if provided
   if (seed !== undefined) {
     payload.seed = seed;
@@ -295,21 +321,26 @@ export async function hyperbolicCompletionConversation(
 
   return withRetry(async () => {
     try {
-      const response = await fetch('https://api.hyperbolic.xyz/v1/completions', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-        signal: abortSignal
-      });
+      const response = await fetch(
+        'https://api.hyperbolic.xyz/v1/completions',
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: abortSignal,
+        }
+      );
 
       if (!response.ok) {
-        throw new Error(`Hyperbolic Completion API error: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `Hyperbolic Completion API error: ${response.status} ${response.statusText}`
+        );
       }
 
       // Process the stream
       if (onChunk && response.body) {
         const reader = response.body.getReader();
-        
+
         // Create a wrapper for onChunk that buffers chunks and only emits them
         // when the next non-whitespace chunk is received or when the stream is done.
         //
@@ -319,8 +350,11 @@ export async function hyperbolicCompletionConversation(
         // previous non-whitespace chunk and emit it with stripped newlines if it's the final chunk
         // in the completion.
         let bufferedChunk: string | null = null;
-        
-        const onChunkWrapper: StreamingCallback = (chunk: string, isDone: boolean) => {
+
+        const onChunkWrapper: StreamingCallback = (
+          chunk: string,
+          isDone: boolean
+        ) => {
           if (isDone) {
             // If we have a buffered chunk and the stream is done,
             // emit it after stripping trailing whitespace
@@ -332,18 +366,18 @@ export async function hyperbolicCompletionConversation(
             onChunk('', true);
             return;
           }
-          
+
           // If this chunk has non-whitespace content
           if (chunk.trim().length > 0) {
             // Mark that we've started receiving a response
             hasStartedReceivingResponse = true;
-            
+
             // If we have a buffered chunk, emit it first
             if (bufferedChunk !== null) {
               onChunk(bufferedChunk, false);
               bufferedChunk = null;
             }
-            
+
             // Buffer this chunk for next time
             bufferedChunk = chunk;
           } else if (bufferedChunk !== null) {
@@ -354,34 +388,40 @@ export async function hyperbolicCompletionConversation(
             bufferedChunk = chunk;
           }
         };
-        
+
         const result = await processStream(reader, onChunkWrapper);
 
         // Calculate cost for Hyperbolic: $4 per 1M tokens
-        const usage = result.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+        const usage = result.usage || {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+        };
         const cost = (usage.totalTokens / 1000000) * 4;
 
         return {
           content: result.content,
-          usage: { ...usage, cost }
+          usage: { ...usage, cost },
         };
       } else {
         // Fallback to non-streaming for backward compatibility
         const data = await response.json();
         hasStartedReceivingResponse = true;
 
-        const usage: UsageData = data.usage ? {
-          promptTokens: data.usage.prompt_tokens || 0,
-          completionTokens: data.usage.completion_tokens || 0,
-          totalTokens: data.usage.total_tokens || 0
-        } : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+        const usage: UsageData = data.usage
+          ? {
+              promptTokens: data.usage.prompt_tokens || 0,
+              completionTokens: data.usage.completion_tokens || 0,
+              totalTokens: data.usage.total_tokens || 0,
+            }
+          : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
         // Calculate cost for Hyperbolic: $4 per 1M tokens
         const cost = (usage.totalTokens / 1000000) * 4;
 
         return {
           content: data.choices[0].text.trim(),
-          usage: { ...usage, cost }
+          usage: { ...usage, cost },
         };
       }
     } catch (error) {
@@ -390,17 +430,26 @@ export async function hyperbolicCompletionConversation(
         console.log('Hyperbolic Completion API request was cancelled');
         throw new Error('Request cancelled');
       }
-      
+
       // If we've already started receiving a response, don't retry
       if (hasStartedReceivingResponse) {
-        console.error('Error during Hyperbolic API streaming (not retrying):', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const noRetryError = new Error(`Hyperbolic API error (response already started): ${errorMessage}`);
+        console.error(
+          'Error during Hyperbolic API streaming (not retrying):',
+          error
+        );
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        const noRetryError = new Error(
+          `Hyperbolic API error (response already started): ${errorMessage}`
+        );
         (noRetryError as NoRetryError).noRetry = true;
         throw noRetryError;
       }
-      
-      console.error('Error calling Hyperbolic Completion API (will retry):', error);
+
+      console.error(
+        'Error calling Hyperbolic Completion API (will retry):',
+        error
+      );
       throw error;
     }
   });
@@ -417,15 +466,18 @@ export async function getOpenRouterGenerationCost(
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${openrouterKey}`,
+        Authorization: `Bearer ${openrouterKey}`,
         'HTTP-Referer': window.location.origin,
-        'X-Title': 'backrooms.directory'
-      }
+        'X-Title': 'backrooms.directory',
+      },
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`OpenRouter Generations API error: ${response.status} ${response.statusText}`, errorText);
+      console.error(
+        `OpenRouter Generations API error: ${response.status} ${response.statusText}`,
+        errorText
+      );
       return null;
     }
 

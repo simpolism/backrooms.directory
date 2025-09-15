@@ -6,7 +6,7 @@ export interface ModelInfo {
 }
 
 export interface Message {
-  role: "user" | "assistant" | "system";
+  role: 'user' | 'assistant' | 'system';
   content: string;
 }
 
@@ -35,8 +35,8 @@ export type StreamingCallback = (chunk: string, isDone: boolean) => void;
 
 // Explore mode settings for a model
 export interface ExploreModeSetting {
-  enabled: boolean;     // Whether explore mode is enabled for this model
-  numRequests: number;  // Number of parallel requests (n) for this model
+  enabled: boolean; // Whether explore mode is enabled for this model
+  numRequests: number; // Number of parallel requests (n) for this model
 }
 
 // Map of model position to explore mode settings
@@ -44,23 +44,27 @@ export type ExploreModeSettings = Record<number, ExploreModeSetting>;
 
 // Interface for tracking parallel responses in explore mode
 export interface ParallelResponse {
-  id: string;           // Unique ID for this response
-  content: string;      // Current accumulated content
-  isSelected: boolean;  // Whether this response has been selected by the user
-  isComplete: boolean;  // Whether this response is complete
-  usage?: UsageData;    // Usage data for this response
+  id: string; // Unique ID for this response
+  content: string; // Current accumulated content
+  isSelected: boolean; // Whether this response has been selected by the user
+  isComplete: boolean; // Whether this response is complete
+  usage?: UsageData; // Usage data for this response
 }
 
 // Selection callback for explore mode
 export type SelectionCallback = (responseId: string) => void;
 
 // Extended streaming callback that includes response ID
-export type ExploreStreamingCallback = (responseId: string, chunk: string, isDone: boolean) => void;
+export type ExploreStreamingCallback = (
+  responseId: string,
+  chunk: string,
+  isDone: boolean
+) => void;
 
 export interface CustomTemplate {
-  name: string;        // Display name for the template
+  name: string; // Display name for the template
   description: string; // Brief description of what the template does
-  content: string;     // Raw JSONL content
+  content: string; // Raw JSONL content
   originalName?: string; // Name of original template if this is based on an existing one
   lastModified: number; // Timestamp
 }
