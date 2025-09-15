@@ -99,3 +99,27 @@ export function loadFromLocalStorage(
     return defaultValue;
   }
 }
+
+export function getModelDisplayName(model: string, modelIndex: number, modelInfo: any): string {
+  if (modelInfo.is_custom_selector) {
+    const savedModel = loadFromLocalStorage(
+      `openrouter_custom_model_${modelIndex}`,
+      null
+    );
+    if (savedModel) {
+      try {
+        const savedModelData = JSON.parse(savedModel);
+        if (savedModelData.name) {
+          // Remove the "Provider: " prefix if it exists
+          const name = savedModelData.name;
+          const colonIndex = name.indexOf(': ');
+          return colonIndex >= 0 ? name.substring(colonIndex + 2) : name;
+        }
+      } catch (e) {
+        console.error('Error parsing saved model:', e);
+      }
+    }
+    return 'OpenRouter Custom';
+  }
+  return modelInfo.display_name;
+}

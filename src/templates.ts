@@ -1,5 +1,6 @@
 import { TemplateConfig, Message, CustomTemplate } from './types';
 import { MODEL_INFO } from './models';
+import { getModelDisplayName } from './utils';
 
 // Custom template storage functions
 export function saveCustomTemplate(template: CustomTemplate): void {
@@ -47,7 +48,8 @@ export async function loadTemplate(
 
     for (let i = 0; i < models.length; i++) {
       companies.push(MODEL_INFO[models[i]].company);
-      actors.push(`${MODEL_INFO[models[i]].display_name} ${i + 1}`);
+      const displayName = getModelDisplayName(models[i], i, MODEL_INFO[models[i]]);
+      actors.push(`${displayName} ${i + 1}`);
     }
 
     for (let i = 0; i < configs.length; i++) {
