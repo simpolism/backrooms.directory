@@ -907,39 +907,22 @@ input:disabled + .toggle-slider:before {
 }
 
 /* Usage Statistics Styles */
-.usage-stats {
-  background-color: #F5F5F5;
-  border: 1px solid #CCCCCC;
-  border-radius: 4px;
-  padding: 10px;
-  margin-bottom: 15px;
-  font-size: 13px;
+.usage-section {
+  margin-bottom: 20px;
 }
 
-.usage-header {
-  display: flex;
-  justify-content: space-between;
+.usage-section .collapsible-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  margin-bottom: 8px;
+  gap: 15px;
 }
 
-.usage-title {
-  font-weight: bold;
-  color: #333333;
-}
-
-.usage-toggle {
-  background: none;
-  border: none;
-  font-size: 12px;
-  cursor: pointer;
-  color: #666666;
-  padding: 2px 4px;
-  border-radius: 2px;
-}
-
-.usage-toggle:hover {
-  background-color: #E0E0E0;
+.usage-totals-header {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-self: center;
 }
 
 .usage-totals {
@@ -956,12 +939,6 @@ input:disabled + .toggle-slider:before {
 .usage-item span {
   font-weight: bold;
   color: #333333;
-}
-
-.usage-breakdown {
-  border-top: 1px solid #DDDDDD;
-  padding-top: 8px;
-  margin-top: 8px;
 }
 
 .model-usage {

@@ -204,19 +204,21 @@
     </div>
     
     <!-- Usage Statistics Section -->
-    <div id="usage-stats" class="usage-stats">
-      <div class="usage-header">
-        <span class="usage-title">Usage Statistics</span>
-        <button id="usage-toggle" class="usage-toggle" aria-label="Toggle usage breakdown">▼</button>
+    <div id="usage-stats" class="collapsible-section usage-section">
+      <div class="collapsible-header">
+        <h2>Usage Statistics</h2>
+        <div class="usage-totals-header">
+          <span class="usage-item">Input: <span id="total-input-tokens">0</span></span>
+          <span class="usage-item">Output: <span id="total-output-tokens">0</span></span>
+          <span class="usage-item">Total: <span id="total-tokens">0</span></span>
+          <span class="usage-item">Cost: $<span id="total-cost">0.00</span></span>
+        </div>
+        <span class="collapse-indicator">▼</span>
       </div>
-      <div class="usage-totals">
-        <span class="usage-item">Input: <span id="total-input-tokens">0</span></span>
-        <span class="usage-item">Output: <span id="total-output-tokens">0</span></span>
-        <span class="usage-item">Total: <span id="total-tokens">0</span></span>
-        <span class="usage-item">Cost: $<span id="total-cost">0.00</span></span>
-      </div>
-      <div id="usage-breakdown" class="usage-breakdown" style="display: none;">
-        <!-- Per-model breakdown will be displayed here -->
+      <div class="collapsible-content">
+        <div id="usage-breakdown" class="usage-breakdown">
+          <!-- Per-model breakdown will be displayed here -->
+        </div>
       </div>
     </div>
 

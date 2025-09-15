@@ -49,7 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Usage statistics UI elements
   const usageStats = document.getElementById('usage-stats') as HTMLDivElement;
-  const usageToggle = document.getElementById('usage-toggle') as HTMLButtonElement;
   const totalInputTokensSpan = document.getElementById('total-input-tokens') as HTMLSpanElement;
   const totalOutputTokensSpan = document.getElementById('total-output-tokens') as HTMLSpanElement;
   const totalTokensSpan = document.getElementById('total-tokens') as HTMLSpanElement;
@@ -263,12 +262,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function initializeUsageTracking() {
-    // Toggle breakdown visibility
-    usageToggle.addEventListener('click', () => {
-      const isExpanded = usageBreakdown.style.display !== 'none';
-      usageBreakdown.style.display = isExpanded ? 'none' : 'block';
-      usageToggle.textContent = isExpanded ? '▼' : '▲';
-    });
+    // The collapsible behavior is now handled by the standard collapsible system
+    // No custom toggle logic needed
   }
 
   // Function to show temporary auth messages
