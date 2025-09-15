@@ -6,16 +6,48 @@ import {
   ExploreModeSettings,
   ExploreStreamingCallback,
   ParallelResponse,
-  SelectionCallback
+  SelectionCallback,
+  ModelResponse,
+  UsageData
 } from './types';
 import { MODEL_INFO } from './models';
 import {
   hyperbolicCompletionConversation,
   openrouterConversation,
+  getOpenRouterGenerationCost,
 } from './api';
 import { loadFromLocalStorage } from './utils';
 
-export function generateModelResponse(
+// Async cost updater function for OpenRouter
+export async function updateOpenRouterCostAsync(
+  generationId: string,
+  modelDisplayName: string,
+  originalUsage: UsageData,
+  apiKeys: ApiKeys,
+  usageCallback?: (modelDisplayName: string, usage: UsageData) => void
+): Promise<void> {
+  try {
+    // Wait for the generation data to be available in OpenRouter's system
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const preciseCost = await getOpenRouterGenerationCost(generationId, apiKeys.openrouterApiKey);
+
+    if (preciseCost !== null && usageCallback) {
+      // Create updated usage data with precise cost
+      const updatedUsage: UsageData = {
+        ...originalUsage,
+        cost: preciseCost
+      };
+
+      // Call the usage callback with the updated cost
+      usageCallback(modelDisplayName, updatedUsage);
+    }
+  } catch (error) {
+    console.warn('Failed to fetch precise cost from OpenRouter generations API:', error);
+  }
+}
+
+export async function generateModelResponse(
   modelInfo: ModelInfo,
   actor: string,
   context: Message[],
@@ -25,13 +57,14 @@ export function generateModelResponse(
   modelIndex?: number,
   onChunk?: StreamingCallback,
   abortSignal?: AbortSignal,
-  seed?: number
-): Promise<string> {
+  seed?: number,
+  usageCallback?: (modelDisplayName: string, usage: UsageData) => void
+): Promise<ModelResponse> {
   // Determine which API to use based on the company
   const company = modelInfo.company;
   
   if (company === 'hyperbolic_completion') {
-    return hyperbolicCompletionConversation(
+    const result = await hyperbolicCompletionConversation(
       actor,
       modelInfo.api_name,
       context,
@@ -42,10 +75,11 @@ export function generateModelResponse(
       abortSignal,
       seed
     );
+    return result;
   } else if (company === 'openrouter') {
     // If this is the custom OpenRouter model, use the saved API name
     let apiName = modelInfo.api_name;
-    
+
     if (modelInfo.is_custom_selector && modelIndex !== undefined) {
       const savedModel = loadFromLocalStorage(`openrouter_custom_model_${modelIndex}`, null);
       if (savedModel) {
@@ -59,8 +93,8 @@ export function generateModelResponse(
         }
       }
     }
-    
-    return openrouterConversation(
+
+    const result = await openrouterConversation(
       actor,
       apiName,
       context,
@@ -71,6 +105,22 @@ export function generateModelResponse(
       abortSignal,
       seed
     );
+
+    // If we have a generation ID, trigger async cost update
+    if (result.generationId && usageCallback) {
+      // Trigger async cost update without blocking
+      updateOpenRouterCostAsync(
+        result.generationId,
+        actor,
+        result.usage,
+        apiKeys,
+        usageCallback
+      ).catch(error => {
+        console.warn('Async cost update failed:', error);
+      });
+    }
+
+    return result;
   } else {
     throw new Error(`Unsupported model company: ${company}`);
   }
@@ -101,6 +151,8 @@ export class Conversation {
   private exploreAbortControllers: Map<string, AbortController> = new Map(); // For cancelling parallel requests
   private selectedMainOutputId: string | null = null; // Track the ID for the selected response in the main output
   private selectedMainOutputContent: string = ""; // Track the content for the selected response in the main output
+  private usageCallback?: (modelDisplayName: string, usage: UsageData) => void; // Callback for usage tracking
+  private currentExploreUsage: UsageData = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 }; // Track usage for current explore mode
 
   constructor(
     models: string[],
@@ -112,7 +164,8 @@ export class Conversation {
     outputCallback: (actor: string, response: string, elementId?: string, isLoading?: boolean) => void,
     seed?: number,
     exploreModeSettings: ExploreModeSettings = {},
-    selectionCallback: SelectionCallback | null = null
+    selectionCallback: SelectionCallback | null = null,
+    usageCallback?: (modelDisplayName: string, usage: UsageData) => void
   ) {
     this.models = models;
     this.systemPrompts = systemPrompts;
@@ -132,6 +185,7 @@ export class Conversation {
     this.seed = seed;
     this.exploreModeSettings = exploreModeSettings;
     this.selectionCallback = selectionCallback;
+    this.usageCallback = usageCallback;
     
     // Generate model display names
     this.modelDisplayNames = models.map((model, index) => {
@@ -336,9 +390,9 @@ export class Conversation {
   /**
    * Makes parallel requests for explore mode
    * @param modelIndex The index of the model
-   * @returns The selected response content
+   * @returns The selected response content and usage data
    */
-  private async makeParallelRequests(modelIndex: number, maxTokens: number): Promise<string> {
+  private async makeParallelRequests(modelIndex: number, maxTokens: number): Promise<{ response: string; usage?: UsageData }> {
     const modelKey = this.models[modelIndex];
     const modelInfo = MODEL_INFO[modelKey];
     const modelName = this.modelDisplayNames[modelIndex];
@@ -365,13 +419,21 @@ export class Conversation {
     this.selectedResponseId = null;
     this.selectedMainOutputId = null;
     this.selectedMainOutputContent = "";
-    
+
+    // Reset explore usage tracking
+    this.currentExploreUsage = {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      cost: 0
+    };
+
     // Clear any existing abort controllers
     for (const controller of this.exploreAbortControllers.values()) {
       controller.abort();
     }
     this.exploreAbortControllers.clear();
-    
+
     // Create promises for parallel requests
     const requestPromises: Promise<void>[] = [];
     
@@ -405,22 +467,32 @@ export class Conversation {
         modelIndex,
         streamingCallback,
         abortController.signal,
-        this.seed ? this.seed + i : undefined // Use different seeds for diversity
-      ).then(response => {
+        this.seed ? this.seed + i : undefined, // Use different seeds for diversity
+        this.usageCallback
+      ).then(modelResponse => {
+        // Accumulate usage data from this response
+        if (modelResponse.usage) {
+          this.currentExploreUsage.promptTokens += modelResponse.usage.promptTokens;
+          this.currentExploreUsage.completionTokens += modelResponse.usage.completionTokens;
+          this.currentExploreUsage.totalTokens += modelResponse.usage.totalTokens;
+          this.currentExploreUsage.cost = (this.currentExploreUsage.cost || 0) + (modelResponse.usage.cost || 0);
+        }
+
         // Mark as complete
         const currentResponse = this.parallelResponses.get(responseId);
         if (currentResponse) {
           this.parallelResponses.set(responseId, {
             ...currentResponse,
-            content: response,
-            isComplete: true
+            content: modelResponse.content,
+            isComplete: true,
+            usage: modelResponse.usage
           });
           
           // If this is the selected response, update the main output window with the final content
           if (currentResponse.isSelected && this.selectedMainOutputId) {
             // Update the accumulated content
-            this.selectedMainOutputContent = response;
-            
+            this.selectedMainOutputContent = modelResponse.content;
+
             // Final update without cursor
             this.outputCallback(
               this.modelDisplayNames[modelIndex],
@@ -479,7 +551,7 @@ export class Conversation {
     }
     
     // Wait for user to select a response AND for it to complete
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<{ response: string; usage?: UsageData }>((resolve, reject) => {
       // Create a function to check if a response has been selected and completed
       const checkSelectionAndCompletion = () => {
         if (this.selectedResponseId) {
@@ -487,7 +559,10 @@ export class Conversation {
           if (selectedResponse) {
             // Only resolve if the selected response is complete
             if (selectedResponse.isComplete) {
-              resolve(selectedResponse.content);
+              resolve({
+                response: selectedResponse.content,
+                usage: this.currentExploreUsage.totalTokens > 0 ? this.currentExploreUsage : undefined
+              });
             } else {
               // If selected but not complete, check again in 200ms
               setTimeout(checkSelectionAndCompletion, 200);
@@ -503,7 +578,7 @@ export class Conversation {
           setTimeout(checkSelectionAndCompletion, 200);
         }
       };
-      
+
       // Start checking for selection and completion
       checkSelectionAndCompletion();
     });
@@ -532,12 +607,15 @@ export class Conversation {
       
       try {
         let response: string;
-        
+        let usageData: UsageData | undefined;
+
         if (isExploreEnabled) {
           // Use explore mode with parallel requests
           // This will wait until a response is selected AND completed
-          response = await this.makeParallelRequests(i, this.maxTokensPerModel[i]);
-          
+          const result = await this.makeParallelRequests(i, this.maxTokensPerModel[i]);
+          response = result.response;
+          usageData = result.usage;
+
           // The response is already displayed in the main output window,
           // so we don't need to output it again
         } else {
@@ -569,8 +647,11 @@ export class Conversation {
             }
           };
           
+          // Store original usage data for comparison
+          const originalUsageData = usageData;
+
           // Make the API call with streaming and pass the abort signal
-          response = await generateModelResponse(
+          const modelResponse = await generateModelResponse(
             MODEL_INFO[this.models[i]],
             this.modelDisplayNames[i],
             this.contexts[i],
@@ -580,10 +661,19 @@ export class Conversation {
             i, // Pass the model index
             streamingCallback, // Pass the streaming callback
             this.abortController.signal, // Pass the abort signal
-            this.seed // Pass the seed if provided
+            this.seed, // Pass the seed if provided
+            this.usageCallback // Pass the usage callback for async cost updates
           );
+
+          response = modelResponse.content;
+          usageData = modelResponse.usage;
         }
-        
+
+        // Track usage data if available
+        if (usageData && this.usageCallback) {
+          this.usageCallback(this.modelDisplayNames[i], usageData);
+        }
+
         // Check for conversation end signal
         if (response.includes('^C^C')) {
           const endMessage = `${this.modelDisplayNames[i]} has ended the conversation with ^C^C.`;

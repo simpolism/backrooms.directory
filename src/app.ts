@@ -3,7 +3,7 @@ import { MODEL_INFO } from './models';
 import { Conversation } from './conversation';
 import { loadTemplate, getAvailableTemplates, saveCustomTemplate, getCustomTemplate, clearCustomTemplate } from './templates';
 import { generateDistinctColors, getRgbColor, saveToLocalStorage, loadFromLocalStorage } from './utils';
-import { ApiKeys, CustomTemplate, ModelInfo, ExploreModeSettings, ExploreModeSetting, ParallelResponse, SelectionCallback } from './types';
+import { ApiKeys, CustomTemplate, ModelInfo, ExploreModeSettings, ExploreModeSetting, ParallelResponse, SelectionCallback, ConversationUsage, UsageData, ModelResponse } from './types';
 import {
   initiateOAuthFlow,
   handleOAuthCallback,
@@ -37,6 +37,23 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Track current template model count
   let currentTemplateModelCount = 2; // Default to 2 models
+
+  // Usage tracking state
+  let conversationUsage: ConversationUsage = {
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalTokens: 0,
+    totalCost: 0,
+    modelBreakdown: {}
+  };
+
+  // Usage statistics UI elements
+  const usageStats = document.getElementById('usage-stats') as HTMLDivElement;
+  const totalInputTokensSpan = document.getElementById('total-input-tokens') as HTMLSpanElement;
+  const totalOutputTokensSpan = document.getElementById('total-output-tokens') as HTMLSpanElement;
+  const totalTokensSpan = document.getElementById('total-tokens') as HTMLSpanElement;
+  const totalCostSpan = document.getElementById('total-cost') as HTMLSpanElement;
+  const usageBreakdown = document.getElementById('usage-breakdown') as HTMLDivElement;
   
   // Font size and word wrap controls
   const decreaseFontSizeBtn = document.getElementById('decrease-font-size') as HTMLButtonElement;
@@ -125,6 +142,130 @@ document.addEventListener('DOMContentLoaded', () => {
   hyperbolicKeyInput.value = loadFromLocalStorage('hyperbolicApiKey', '');
   openrouterKeyInput.value = loadFromLocalStorage('openrouterApiKey', '');
   
+  // Usage tracking functions
+  function resetUsageTracking() {
+    conversationUsage = {
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      modelBreakdown: {}
+    };
+    updateUsageDisplay();
+  }
+
+  function updateUsageWithResponse(modelDisplayName: string, usage: UsageData) {
+    const previousTotalCost = conversationUsage.totalCost;
+    const costToAdd = usage.cost || 0;
+
+    // Initialize model breakdown if it doesn't exist
+    if (!conversationUsage.modelBreakdown[modelDisplayName]) {
+      conversationUsage.modelBreakdown[modelDisplayName] = {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cost: 0
+      };
+    }
+
+    const modelStats = conversationUsage.modelBreakdown[modelDisplayName];
+
+    // Check if this is a cost-only update (same tokens, different cost)
+    const isCostOnlyUpdate = (
+      usage.totalTokens === modelStats.totalTokens &&
+      usage.promptTokens === modelStats.promptTokens &&
+      usage.completionTokens === modelStats.completionTokens &&
+      costToAdd > (modelStats.cost || 0)
+    );
+
+    if (isCostOnlyUpdate) {
+      // Cost-only update: don't add tokens again, just update cost
+      const previousModelCost = modelStats.cost || 0;
+      const costDifference = costToAdd - previousModelCost;
+
+      conversationUsage.totalCost += costDifference;
+      modelStats.cost = costToAdd;
+    } else {
+      // Regular update: add tokens and cost
+      conversationUsage.totalInputTokens += usage.promptTokens;
+      conversationUsage.totalOutputTokens += usage.completionTokens;
+      conversationUsage.totalTokens += usage.totalTokens;
+      conversationUsage.totalCost += costToAdd;
+
+      modelStats.promptTokens += usage.promptTokens;
+      modelStats.completionTokens += usage.completionTokens;
+      modelStats.totalTokens += usage.totalTokens;
+      modelStats.cost = (modelStats.cost || 0) + costToAdd;
+    }
+
+    updateUsageDisplay();
+  }
+
+  function updateUsageDisplay() {
+    // Update totals
+    totalInputTokensSpan.textContent = conversationUsage.totalInputTokens.toLocaleString();
+    totalOutputTokensSpan.textContent = conversationUsage.totalOutputTokens.toLocaleString();
+    totalTokensSpan.textContent = conversationUsage.totalTokens.toLocaleString();
+    totalCostSpan.textContent = conversationUsage.totalCost.toFixed(7);
+
+    // Update breakdown
+    usageBreakdown.innerHTML = '';
+    Object.entries(conversationUsage.modelBreakdown).forEach(([modelName, stats]) => {
+      const modelDiv = document.createElement('div');
+      modelDiv.className = 'model-usage';
+
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'model-name';
+      nameDiv.textContent = modelName;
+
+      const statsDiv = document.createElement('div');
+      statsDiv.className = 'model-stats';
+
+      const inputTokensDiv = document.createElement('div');
+      inputTokensDiv.className = 'model-stat';
+      inputTokensDiv.innerHTML = `
+        <div class="model-stat-label">Input</div>
+        <div class="model-stat-value">${stats.promptTokens.toLocaleString()}</div>
+      `;
+
+      const outputTokensDiv = document.createElement('div');
+      outputTokensDiv.className = 'model-stat';
+      outputTokensDiv.innerHTML = `
+        <div class="model-stat-label">Output</div>
+        <div class="model-stat-value">${stats.completionTokens.toLocaleString()}</div>
+      `;
+
+      const tokensDiv = document.createElement('div');
+      tokensDiv.className = 'model-stat';
+      tokensDiv.innerHTML = `
+        <div class="model-stat-label">Total</div>
+        <div class="model-stat-value">${stats.totalTokens.toLocaleString()}</div>
+      `;
+
+      const costDiv = document.createElement('div');
+      costDiv.className = 'model-stat';
+      costDiv.innerHTML = `
+        <div class="model-stat-label">Cost</div>
+        <div class="model-stat-value">$${(stats.cost || 0).toFixed(7)}</div>
+      `;
+
+      statsDiv.appendChild(inputTokensDiv);
+      statsDiv.appendChild(outputTokensDiv);
+      statsDiv.appendChild(tokensDiv);
+      statsDiv.appendChild(costDiv);
+
+      modelDiv.appendChild(nameDiv);
+      modelDiv.appendChild(statsDiv);
+
+      usageBreakdown.appendChild(modelDiv);
+    });
+  }
+
+  function initializeUsageTracking() {
+    // The collapsible behavior is now handled by the standard collapsible system
+    // No custom toggle logic needed
+  }
+
   // Function to show temporary auth messages
   function showAuthMessage(message: string, isError: boolean = false, duration: number = 5000) {
     // Set message and styling
@@ -1710,9 +1851,12 @@ document.addEventListener('DOMContentLoaded', () => {
   async function startConversation() {
     // Hide export button when starting a new conversation
     exportButton.style.display = 'none';
-    
+
     // Clear previous output
     conversationOutput.innerHTML = '';
+
+    // Reset usage tracking for new conversation
+    resetUsageTracking();
     
     // Get all model selects
     const allModelSelects = document.querySelectorAll('.model-select') as NodeListOf<HTMLSelectElement>;
@@ -1870,7 +2014,8 @@ document.addEventListener('DOMContentLoaded', () => {
         addOutputMessage,
         seed,
         exploreModeSettings,
-        exploreSelectionCallback
+        exploreSelectionCallback,
+        updateUsageWithResponse
       );
       
       addOutputMessage('System', `Starting conversation with template "${templateName}"...`);
@@ -1931,4 +2076,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loadButton.disabled = false;
     }
   }
+
+  // Initialize usage tracking
+  initializeUsageTracking();
 });

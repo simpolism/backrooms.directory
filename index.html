@@ -203,6 +203,25 @@
       </div>
     </div>
     
+    <!-- Usage Statistics Section -->
+    <div id="usage-stats" class="collapsible-section usage-section">
+      <div class="collapsible-header">
+        <h2>Usage Statistics</h2>
+        <div class="usage-totals-header">
+          <span class="usage-item">Input: <span id="total-input-tokens">0</span></span>
+          <span class="usage-item">Output: <span id="total-output-tokens">0</span></span>
+          <span class="usage-item">Total: <span id="total-tokens">0</span></span>
+          <span class="usage-item">Cost: $<span id="total-cost">0.00</span></span>
+        </div>
+        <span class="collapse-indicator">▼</span>
+      </div>
+      <div class="collapsible-content">
+        <div id="usage-breakdown" class="usage-breakdown">
+          <!-- Per-model breakdown will be displayed here -->
+        </div>
+      </div>
+    </div>
+
     <div class="conversation-container">
       <div class="scroll-spacer"></div>
       <div id="conversation-output" class="conversation-output"></div>
