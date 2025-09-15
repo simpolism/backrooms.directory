@@ -150,9 +150,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateUsageWithResponse(modelDisplayName: string, usage: UsageData) {
+    const previousTotalCost = conversationUsage.totalCost;
+    const costToAdd = usage.cost || 0;
+
     // Update total stats
     conversationUsage.totalTokens += usage.totalTokens;
-    conversationUsage.totalCost += (usage.cost || 0);
+    conversationUsage.totalCost += costToAdd;
 
     // Update model breakdown
     if (!conversationUsage.modelBreakdown[modelDisplayName]) {
@@ -168,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modelStats.promptTokens += usage.promptTokens;
     modelStats.completionTokens += usage.completionTokens;
     modelStats.totalTokens += usage.totalTokens;
-    modelStats.cost = (modelStats.cost || 0) + (usage.cost || 0);
+    modelStats.cost = (modelStats.cost || 0) + costToAdd;
 
     updateUsageDisplay();
   }
@@ -176,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateUsageDisplay() {
     // Update totals
     totalTokensSpan.textContent = conversationUsage.totalTokens.toLocaleString();
-    totalCostSpan.textContent = conversationUsage.totalCost.toFixed(4);
+    totalCostSpan.textContent = conversationUsage.totalCost.toFixed(7);
 
     // Update breakdown
     usageBreakdown.innerHTML = '';
@@ -202,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
       costDiv.className = 'model-stat';
       costDiv.innerHTML = `
         <div class="model-stat-label">Cost</div>
-        <div class="model-stat-value">$${(stats.cost || 0).toFixed(4)}</div>
+        <div class="model-stat-value">$${(stats.cost || 0).toFixed(7)}</div>
       `;
 
       statsDiv.appendChild(tokensDiv);

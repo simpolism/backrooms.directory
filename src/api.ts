@@ -412,7 +412,9 @@ export async function getOpenRouterGenerationCost(
   openrouterKey: string
 ): Promise<number | null> {
   try {
-    const response = await fetch(`https://openrouter.ai/api/v1/generation?id=${generationId}`, {
+    const url = `https://openrouter.ai/api/v1/generation?id=${generationId}`;
+
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${openrouterKey}`,
@@ -422,14 +424,15 @@ export async function getOpenRouterGenerationCost(
     });
 
     if (!response.ok) {
-      console.error(`OpenRouter Generations API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`OpenRouter Generations API error: ${response.status} ${response.statusText}`, errorText);
       return null;
     }
 
     const data = await response.json();
-
     // Return the total cost if available
-    return data.total_cost || null;
+    const cost = data.data.total_cost || null;
+    return cost;
   } catch (error) {
     console.error('Error fetching OpenRouter generation cost:', error);
     return null;

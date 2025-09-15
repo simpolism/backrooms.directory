@@ -79,7 +79,11 @@ export async function generateModelResponse(
     // Try to fetch precise cost data if generation ID is available
     if (result.generationId) {
       try {
+        // Wait for the generation data to be available in OpenRouter's system
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         const preciseCost = await getOpenRouterGenerationCost(result.generationId, apiKeys.openrouterApiKey);
+
         if (preciseCost !== null) {
           result.usage.cost = preciseCost;
         }
@@ -614,6 +618,9 @@ export class Conversation {
             }
           };
           
+          // Store original usage data for comparison
+          const originalUsageData = usageData;
+
           // Make the API call with streaming and pass the abort signal
           const modelResponse = await generateModelResponse(
             MODEL_INFO[this.models[i]],
