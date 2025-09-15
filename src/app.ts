@@ -153,11 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const previousTotalCost = conversationUsage.totalCost;
     const costToAdd = usage.cost || 0;
 
-    // Update total stats
-    conversationUsage.totalTokens += usage.totalTokens;
-    conversationUsage.totalCost += costToAdd;
-
-    // Update model breakdown
+    // Initialize model breakdown if it doesn't exist
     if (!conversationUsage.modelBreakdown[modelDisplayName]) {
       conversationUsage.modelBreakdown[modelDisplayName] = {
         promptTokens: 0,
@@ -168,10 +164,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const modelStats = conversationUsage.modelBreakdown[modelDisplayName];
-    modelStats.promptTokens += usage.promptTokens;
-    modelStats.completionTokens += usage.completionTokens;
-    modelStats.totalTokens += usage.totalTokens;
-    modelStats.cost = (modelStats.cost || 0) + costToAdd;
+
+    // Check if this is a cost-only update (same tokens, different cost)
+    const isCostOnlyUpdate = (
+      usage.totalTokens === modelStats.totalTokens &&
+      usage.promptTokens === modelStats.promptTokens &&
+      usage.completionTokens === modelStats.completionTokens &&
+      costToAdd > (modelStats.cost || 0)
+    );
+
+    if (isCostOnlyUpdate) {
+      // Cost-only update: don't add tokens again, just update cost
+      const previousModelCost = modelStats.cost || 0;
+      const costDifference = costToAdd - previousModelCost;
+
+      conversationUsage.totalCost += costDifference;
+      modelStats.cost = costToAdd;
+    } else {
+      // Regular update: add tokens and cost
+      conversationUsage.totalTokens += usage.totalTokens;
+      conversationUsage.totalCost += costToAdd;
+
+      modelStats.promptTokens += usage.promptTokens;
+      modelStats.completionTokens += usage.completionTokens;
+      modelStats.totalTokens += usage.totalTokens;
+      modelStats.cost = (modelStats.cost || 0) + costToAdd;
+    }
 
     updateUsageDisplay();
   }

@@ -18,6 +18,35 @@ import {
 } from './api';
 import { loadFromLocalStorage } from './utils';
 
+// Async cost updater function for OpenRouter
+export async function updateOpenRouterCostAsync(
+  generationId: string,
+  modelDisplayName: string,
+  originalUsage: UsageData,
+  apiKeys: ApiKeys,
+  usageCallback?: (modelDisplayName: string, usage: UsageData) => void
+): Promise<void> {
+  try {
+    // Wait for the generation data to be available in OpenRouter's system
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const preciseCost = await getOpenRouterGenerationCost(generationId, apiKeys.openrouterApiKey);
+
+    if (preciseCost !== null && usageCallback) {
+      // Create updated usage data with precise cost
+      const updatedUsage: UsageData = {
+        ...originalUsage,
+        cost: preciseCost
+      };
+
+      // Call the usage callback with the updated cost
+      usageCallback(modelDisplayName, updatedUsage);
+    }
+  } catch (error) {
+    console.warn('Failed to fetch precise cost from OpenRouter generations API:', error);
+  }
+}
+
 export async function generateModelResponse(
   modelInfo: ModelInfo,
   actor: string,
@@ -28,7 +57,8 @@ export async function generateModelResponse(
   modelIndex?: number,
   onChunk?: StreamingCallback,
   abortSignal?: AbortSignal,
-  seed?: number
+  seed?: number,
+  usageCallback?: (modelDisplayName: string, usage: UsageData) => void
 ): Promise<ModelResponse> {
   // Determine which API to use based on the company
   const company = modelInfo.company;
@@ -76,20 +106,18 @@ export async function generateModelResponse(
       seed
     );
 
-    // Try to fetch precise cost data if generation ID is available
-    if (result.generationId) {
-      try {
-        // Wait for the generation data to be available in OpenRouter's system
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        const preciseCost = await getOpenRouterGenerationCost(result.generationId, apiKeys.openrouterApiKey);
-
-        if (preciseCost !== null) {
-          result.usage.cost = preciseCost;
-        }
-      } catch (error) {
-        console.warn('Failed to fetch precise cost from OpenRouter generations API:', error);
-      }
+    // If we have a generation ID, trigger async cost update
+    if (result.generationId && usageCallback) {
+      // Trigger async cost update without blocking
+      updateOpenRouterCostAsync(
+        result.generationId,
+        actor,
+        result.usage,
+        apiKeys,
+        usageCallback
+      ).catch(error => {
+        console.warn('Async cost update failed:', error);
+      });
     }
 
     return result;
@@ -439,7 +467,8 @@ export class Conversation {
         modelIndex,
         streamingCallback,
         abortController.signal,
-        this.seed ? this.seed + i : undefined // Use different seeds for diversity
+        this.seed ? this.seed + i : undefined, // Use different seeds for diversity
+        this.usageCallback
       ).then(modelResponse => {
         // Accumulate usage data from this response
         if (modelResponse.usage) {
@@ -632,7 +661,8 @@ export class Conversation {
             i, // Pass the model index
             streamingCallback, // Pass the streaming callback
             this.abortController.signal, // Pass the abort signal
-            this.seed // Pass the seed if provided
+            this.seed, // Pass the seed if provided
+            this.usageCallback // Pass the usage callback for async cost updates
           );
 
           response = modelResponse.content;
