@@ -16,7 +16,7 @@ import {
   openrouterConversation,
   getOpenRouterGenerationCost,
 } from './api';
-import { loadFromLocalStorage } from './utils';
+import { loadFromLocalStorage, getModelDisplayName } from './utils';
 
 // Async cost updater function for OpenRouter
 export async function updateOpenRouterCostAsync(
@@ -213,7 +213,8 @@ export class Conversation {
 
     // Generate model display names
     this.modelDisplayNames = models.map((model, index) => {
-      return `${MODEL_INFO[model].display_name} ${index + 1}`;
+      const displayName = getModelDisplayName(model, index, MODEL_INFO[model]);
+      return `${displayName} ${index + 1}`;
     });
 
     // Check if explore mode is enabled for any model

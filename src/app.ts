@@ -13,6 +13,7 @@ import {
   getRgbColor,
   saveToLocalStorage,
   loadFromLocalStorage,
+  getModelDisplayName,
 } from './utils';
 import {
   ApiKeys,
@@ -821,7 +822,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ? savedModelSelections[i]
             : Object.keys(MODEL_INFO)[0]);
         const modelInfo = MODEL_INFO[modelKey];
-        const modelName = `${modelInfo.display_name} ${i + 1}`;
+        const displayName = getModelDisplayName(modelKey, i, modelInfo);
+        const modelName = `${displayName} ${i + 1}`;
 
         // Create label with model name
         const exploreLabel = document.createElement('label');
@@ -1288,7 +1290,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Set option text with API key info
-      option.textContent = `${modelInfo.display_name} (${modelKey}) - ${apiKeyName}`;
+      const displayName =
+        index !== undefined
+          ? getModelDisplayName(modelKey, index, modelInfo)
+          : modelInfo.display_name;
+      option.textContent = `${displayName} (${modelKey}) - ${apiKeyName}`;
 
       // Add a visual indicator if API key is missing
       if (!apiKeyAvailable) {
