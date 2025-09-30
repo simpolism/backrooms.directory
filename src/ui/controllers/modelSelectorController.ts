@@ -7,7 +7,7 @@ import {
   loadCustomModel,
   saveCustomModel,
   clearCustomModel,
-} from '../persistence/customModels';
+} from '../../persistence/customModels';
 
 interface ApiKeys {
   hyperbolicApiKey: string;

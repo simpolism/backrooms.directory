@@ -42,7 +42,7 @@ import {
   extractConversationLogFromDom,
   formatConversationLog,
 } from './ui/persistence/conversationLog';
-import { loadCustomModel } from './ui/persistence/customModels';
+import { loadCustomModel } from './persistence/customModels';
 import { initializeTemplateEditor } from './ui/controllers/templateEditorController';
 
 document.addEventListener('DOMContentLoaded', () => {

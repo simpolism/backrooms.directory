@@ -1,3 +1,5 @@
+import { loadCustomModel } from './persistence/customModels';
+
 export function generateDistinctColors() {
   let hue = 0;
   const goldenRatioConjugate = 0.618033988749895;
@@ -106,6 +108,11 @@ export function getModelDisplayName(
   modelInfo: any
 ): string {
   if (modelInfo.is_custom_selector) {
+    const saved = loadCustomModel(modelIndex);
+    if (saved?.name) {
+      const colonIndex = saved.name.indexOf(': ');
+      return colonIndex >= 0 ? saved.name.substring(colonIndex + 2) : saved.name;
+    }
     return 'OpenRouter Custom';
   }
   return modelInfo.display_name;
