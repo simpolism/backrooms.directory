@@ -13,25 +13,37 @@ import {
   getRgbColor,
   saveToLocalStorage,
   loadFromLocalStorage,
-  getModelDisplayName,
 } from './utils';
-import {
-  ApiKeys,
-  CustomTemplate,
-  ModelInfo,
-  ExploreModeSettings,
-  ExploreModeSetting,
-  ParallelResponse,
-  SelectionCallback,
-  ConversationUsage,
-  UsageData,
-  ModelResponse,
-} from './types';
+import { ApiKeys, SelectionCallback } from './types';
 import {
   initiateOAuthFlow,
   handleOAuthCallback,
   getAuthorizationCode,
 } from './oauth';
+import {
+  getSettings,
+  updateSettings,
+  subscribeToSettings,
+} from './state/settingsStore';
+import {
+  createUsageController,
+  UsageElements,
+  UsageController,
+} from './ui/controllers/usageController';
+import { createExploreModeController } from './ui/controllers/exploreModeController';
+import { createModelSelectorController } from './ui/controllers/modelSelectorController';
+import type { ModelSelectorController } from './ui/controllers/modelSelectorController';
+import {
+  createConversationLifecycleController,
+  ConversationLifecycleController,
+} from './ui/controllers/conversationController';
+import {
+  parseConversationLog,
+  extractConversationLogFromDom,
+  formatConversationLog,
+} from './ui/persistence/conversationLog';
+import { loadCustomModel } from './ui/persistence/customModels';
+import { initializeTemplateEditor } from './ui/controllers/templateEditorController';
 
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize UI elements
@@ -72,18 +84,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadFileInput.accept = '.txt';
   loadFileInput.style.display = 'none';
 
-  // Track current template model count
-  let currentTemplateModelCount = 2; // Default to 2 models
-
-  // Usage tracking state
-  let conversationUsage: ConversationUsage = {
-    totalInputTokens: 0,
-    totalOutputTokens: 0,
-    totalTokens: 0,
-    totalCost: 0,
-    modelBreakdown: {},
-  };
-
   // Usage statistics UI elements
   const usageStats = document.getElementById('usage-stats') as HTMLDivElement;
   const totalInputTokensSpan = document.getElementById(
@@ -102,6 +102,24 @@ document.addEventListener('DOMContentLoaded', () => {
     'usage-breakdown'
   ) as HTMLDivElement;
 
+  const usageElements: UsageElements = {
+    usageStats,
+    totalInputTokens: totalInputTokensSpan,
+    totalOutputTokens: totalOutputTokensSpan,
+    totalTokens: totalTokensSpan,
+    totalCost: totalCostSpan,
+    usageBreakdown,
+  };
+  const usageController: UsageController = createUsageController(usageElements);
+  usageController.reset();
+
+  let settings = getSettings();
+  const unsubscribeSettings = subscribeToSettings((nextSettings) => {
+    settings = nextSettings;
+  });
+  let modelController: ModelSelectorController | null = null;
+  let conversationLifecycle: ConversationLifecycleController | null = null;
+
   // Font size and word wrap controls
   const decreaseFontSizeBtn = document.getElementById(
     'decrease-font-size'
@@ -115,6 +133,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const wordWrapToggle = document.getElementById(
     'word-wrap-toggle'
   ) as HTMLInputElement;
+
+  let currentFontSize = settings.outputFontSize ?? 12;
 
   // Initialize collapsible sections
   const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
@@ -169,9 +189,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Conversation state
-  let activeConversation: Conversation | null = null;
-  let isConversationRunning = false;
+  const exploreModeController = createExploreModeController({
+    container: exploreModeContainer,
+    outputsContainer: exploreModeOutputs,
+    getFontSize: () => currentFontSize,
+    isWordWrapEnabled: () => wordWrapToggle.checked,
+    onSelect: (responseId) => {
+      conversationLifecycle
+        ?.getActiveConversation()
+        ?.handleSelection(responseId);
+    },
+  });
+  exploreModeController.updateVisibility(settings.exploreModeSettings || {});
 
   // API key input elements
   const hyperbolicKeyInput = document.getElementById(
@@ -211,136 +240,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Load saved API keys if available
-  hyperbolicKeyInput.value = loadFromLocalStorage('hyperbolicApiKey', '');
-  openrouterKeyInput.value = loadFromLocalStorage('openrouterApiKey', '');
-
-  // Usage tracking functions
-  function resetUsageTracking() {
-    conversationUsage = {
-      totalInputTokens: 0,
-      totalOutputTokens: 0,
-      totalTokens: 0,
-      totalCost: 0,
-      modelBreakdown: {},
-    };
-    updateUsageDisplay();
-  }
-
-  function updateUsageWithResponse(modelDisplayName: string, usage: UsageData) {
-    const previousTotalCost = conversationUsage.totalCost;
-    const costToAdd = usage.cost || 0;
-
-    // Initialize model breakdown if it doesn't exist
-    if (!conversationUsage.modelBreakdown[modelDisplayName]) {
-      conversationUsage.modelBreakdown[modelDisplayName] = {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        cost: 0,
-      };
-    }
-
-    const modelStats = conversationUsage.modelBreakdown[modelDisplayName];
-
-    // Check if this is a cost-only update (same tokens, different cost)
-    const isCostOnlyUpdate =
-      usage.totalTokens === modelStats.totalTokens &&
-      usage.promptTokens === modelStats.promptTokens &&
-      usage.completionTokens === modelStats.completionTokens &&
-      costToAdd > (modelStats.cost || 0);
-
-    if (isCostOnlyUpdate) {
-      // Cost-only update: don't add tokens again, just update cost
-      const previousModelCost = modelStats.cost || 0;
-      const costDifference = costToAdd - previousModelCost;
-
-      conversationUsage.totalCost += costDifference;
-      modelStats.cost = costToAdd;
-    } else {
-      // Regular update: add tokens and cost
-      conversationUsage.totalInputTokens += usage.promptTokens;
-      conversationUsage.totalOutputTokens += usage.completionTokens;
-      conversationUsage.totalTokens += usage.totalTokens;
-      conversationUsage.totalCost += costToAdd;
-
-      modelStats.promptTokens += usage.promptTokens;
-      modelStats.completionTokens += usage.completionTokens;
-      modelStats.totalTokens += usage.totalTokens;
-      modelStats.cost = (modelStats.cost || 0) + costToAdd;
-    }
-
-    updateUsageDisplay();
-  }
-
-  function updateUsageDisplay() {
-    // Update totals
-    totalInputTokensSpan.textContent =
-      conversationUsage.totalInputTokens.toLocaleString();
-    totalOutputTokensSpan.textContent =
-      conversationUsage.totalOutputTokens.toLocaleString();
-    totalTokensSpan.textContent =
-      conversationUsage.totalTokens.toLocaleString();
-    totalCostSpan.textContent = conversationUsage.totalCost.toFixed(7);
-
-    // Update breakdown
-    usageBreakdown.innerHTML = '';
-    Object.entries(conversationUsage.modelBreakdown).forEach(
-      ([modelName, stats]) => {
-        const modelDiv = document.createElement('div');
-        modelDiv.className = 'model-usage';
-
-        const nameDiv = document.createElement('div');
-        nameDiv.className = 'model-name';
-        nameDiv.textContent = modelName;
-
-        const statsDiv = document.createElement('div');
-        statsDiv.className = 'model-stats';
-
-        const inputTokensDiv = document.createElement('div');
-        inputTokensDiv.className = 'model-stat';
-        inputTokensDiv.innerHTML = `
-        <div class="model-stat-label">Input</div>
-        <div class="model-stat-value">${stats.promptTokens.toLocaleString()}</div>
-      `;
-
-        const outputTokensDiv = document.createElement('div');
-        outputTokensDiv.className = 'model-stat';
-        outputTokensDiv.innerHTML = `
-        <div class="model-stat-label">Output</div>
-        <div class="model-stat-value">${stats.completionTokens.toLocaleString()}</div>
-      `;
-
-        const tokensDiv = document.createElement('div');
-        tokensDiv.className = 'model-stat';
-        tokensDiv.innerHTML = `
-        <div class="model-stat-label">Total</div>
-        <div class="model-stat-value">${stats.totalTokens.toLocaleString()}</div>
-      `;
-
-        const costDiv = document.createElement('div');
-        costDiv.className = 'model-stat';
-        costDiv.innerHTML = `
-        <div class="model-stat-label">Cost</div>
-        <div class="model-stat-value">$${(stats.cost || 0).toFixed(7)}</div>
-      `;
-
-        statsDiv.appendChild(inputTokensDiv);
-        statsDiv.appendChild(outputTokensDiv);
-        statsDiv.appendChild(tokensDiv);
-        statsDiv.appendChild(costDiv);
-
-        modelDiv.appendChild(nameDiv);
-        modelDiv.appendChild(statsDiv);
-
-        usageBreakdown.appendChild(modelDiv);
-      }
-    );
-  }
-
-  function initializeUsageTracking() {
-    // The collapsible behavior is now handled by the standard collapsible system
-    // No custom toggle logic needed
-  }
+  hyperbolicKeyInput.value = settings.hyperbolicApiKey || '';
+  openrouterKeyInput.value = settings.openrouterApiKey || '';
 
   // Function to show temporary auth messages
   function showAuthMessage(
@@ -388,55 +289,35 @@ document.addEventListener('DOMContentLoaded', () => {
     openrouterAuthContainer.dataset.timeoutId = timeoutId.toString();
   }
 
-  // Max output length is now per-model and loaded in updateModelInputs
+  // Max output length is now per-model and handled by the model controller
 
   // Load saved seed if available
-  seedInput.value = loadFromLocalStorage('seed', '');
-  // Load saved font size, word wrap, and auto-scroll settings
-  const savedFontSize = loadFromLocalStorage('outputFontSize', '12');
-  const savedWordWrap = loadFromLocalStorage('outputWordWrap', 'true');
-  const savedAutoScroll = loadFromLocalStorage('outputAutoScroll', 'true');
+  seedInput.value = settings.seed || '';
 
   // Initialize font size and word wrap with saved values
-  let currentFontSize = parseInt(savedFontSize);
+  currentFontSize = settings.outputFontSize ?? 12;
   currentFontSizeSpan.textContent = `${currentFontSize}px`;
   conversationOutput.style.fontSize = `${currentFontSize}px`;
 
   // Initialize word wrap with saved value
-  wordWrapToggle.checked = savedWordWrap === 'true';
-  conversationOutput.style.whiteSpace = wordWrapToggle.checked
-    ? 'pre-wrap'
-    : 'pre';
+  wordWrapToggle.checked = settings.outputWordWrap ?? true;
+  conversationOutput.style.whiteSpace = wordWrapToggle.checked ? 'pre-wrap' : 'pre';
 
   // Initialize auto-scroll with saved value
   const autoScrollToggle = document.getElementById(
     'auto-scroll-toggle'
   ) as HTMLInputElement;
-  autoScrollToggle.checked = savedAutoScroll === 'true';
-  conversationOutput.style.whiteSpace = wordWrapToggle.checked
-    ? 'pre-wrap'
-    : 'pre';
-
-  // Function to refresh model selects when API keys change
-  function refreshModelSelects() {
-    const allModelSelects = document.querySelectorAll(
-      '.model-select'
-    ) as NodeListOf<HTMLSelectElement>;
-    allModelSelects.forEach((select, index) => {
-      const selectedValue = select.value;
-      populateModelSelect(select, index, selectedValue);
-    });
-  }
+  autoScrollToggle.checked = settings.outputAutoScroll ?? true;
 
   // Save API keys when changed and refresh model selects
   hyperbolicKeyInput.addEventListener('change', () => {
-    saveToLocalStorage('hyperbolicApiKey', hyperbolicKeyInput.value);
-    refreshModelSelects();
+    updateSettings({ hyperbolicApiKey: hyperbolicKeyInput.value });
+    modelController?.refreshModelSelects();
   });
 
   openrouterKeyInput.addEventListener('change', () => {
-    saveToLocalStorage('openrouterApiKey', openrouterKeyInput.value);
-    refreshModelSelects();
+    updateSettings({ openrouterApiKey: openrouterKeyInput.value });
+    modelController?.refreshModelSelects();
   });
 
   // Handle OpenRouter OAuth button click
@@ -486,14 +367,14 @@ document.addEventListener('DOMContentLoaded', () => {
       handleOAuthCallback(
         // Success callback
         (apiKey) => {
-          // Save the API key to localStorage
-          saveToLocalStorage('openrouterApiKey', apiKey);
+          // Persist the API key in settings
+          updateSettings({ openrouterApiKey: apiKey });
 
           // Update the input field
           openrouterKeyInput.value = apiKey;
 
           // Refresh model selects
-          refreshModelSelects();
+          modelController?.refreshModelSelects();
 
           // Show success message
           showAuthMessage(
@@ -551,15 +432,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Apply font size to conversation output
     conversationOutput.style.fontSize = `${currentFontSize}px`;
 
-    // Apply font size to explore mode outputs
-    const exploreOutputContents = document.querySelectorAll(
-      '.explore-output-content'
-    );
-    exploreOutputContents.forEach((content) => {
-      (content as HTMLElement).style.fontSize = `${currentFontSize}px`;
-    });
-
-    saveToLocalStorage('outputFontSize', currentFontSize.toString());
+    updateSettings({ outputFontSize: currentFontSize });
+    exploreModeController.updatePresentation();
   }
 
   // Word wrap toggle event handler
@@ -586,17 +460,8 @@ document.addEventListener('DOMContentLoaded', () => {
       ? 'pre-wrap'
       : 'pre';
 
-    // Apply word wrap to explore mode outputs
-    const exploreOutputContents = document.querySelectorAll(
-      '.explore-output-content'
-    );
-    exploreOutputContents.forEach((content) => {
-      (content as HTMLElement).style.whiteSpace = wordWrapToggle.checked
-        ? 'pre-wrap'
-        : 'pre';
-    });
-
-    saveToLocalStorage('outputWordWrap', wordWrapToggle.checked.toString());
+    updateSettings({ outputWordWrap: wordWrapToggle.checked });
+    exploreModeController.updatePresentation();
   }
 
   // Auto-scroll toggle event handler
@@ -620,74 +485,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Update auto-scroll and save to localStorage
   function updateAutoScroll() {
-    saveToLocalStorage('outputAutoScroll', autoScrollToggle.checked.toString());
+    updateSettings({ outputAutoScroll: autoScrollToggle.checked });
   }
 
-  // Load saved model and template selections if available
-  const savedModelSelections = loadFromLocalStorage('modelSelections', []);
-  const savedTemplateSelection = loadFromLocalStorage('templateSelection', '');
-
-  // Function to save all model selections
-  function saveModelSelections() {
-    const allModelSelects = document.querySelectorAll(
-      '.model-select'
-    ) as NodeListOf<HTMLSelectElement>;
-    const models: string[] = Array.from(allModelSelects).map(
-      (select) => select.value
-    );
-    saveToLocalStorage('modelSelections', models);
-  }
-
-  // Function to fetch OpenRouter models
-  async function fetchOpenRouterModels(apiKey: string): Promise<any[]> {
-    try {
-      // Check if we have cached models and they're not expired
-      const cachedData = loadFromLocalStorage('openrouterModelsCache', null);
-      if (cachedData) {
-        try {
-          const { models, timestamp } = JSON.parse(cachedData);
-          // Cache expires after 1 hour (3600000 ms)
-          if (Date.now() - timestamp < 3600000) {
-            return models;
-          }
-        } catch (e) {
-          console.error('Error parsing cached models:', e);
-          // Continue to fetch fresh data if cache parsing fails
-        }
-      }
-
-      // Fetch fresh data
-      const response = await fetch('https://openrouter.ai/api/v1/models', {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'backrooms.directory',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `OpenRouter API error: ${response.status} ${response.statusText}`
-        );
-      }
-
-      const data = await response.json();
-
-      // Cache the results with timestamp
-      saveToLocalStorage(
-        'openrouterModelsCache',
-        JSON.stringify({
-          models: data.data,
-          timestamp: Date.now(),
-        })
-      );
-
-      return data.data;
-    } catch (error) {
-      console.error('Error fetching OpenRouter models:', error);
-      throw error;
-    }
-  }
+  // Load saved template selection if available
+  const savedTemplateSelection = settings.selectedTemplate || '';
 
   // Color generator for actors
   const colorGenerator = generateDistinctColors();
@@ -726,624 +528,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Update model inputs based on template
-  async function updateModelInputs(templateName: string) {
-    try {
-      // Get the number of models from the template
-      const modelCount = await getTemplateModelCount(templateName);
-      currentTemplateModelCount = modelCount;
-
-      // Save current model selections before clearing
-      const currentSelections: string[] = [];
-      const existingModelSelects = document.querySelectorAll(
-        '.model-select'
-      ) as NodeListOf<HTMLSelectElement>;
-      existingModelSelects.forEach((select) => {
-        currentSelections.push(select.value);
-      });
-
-      // Clear existing model inputs
-      modelInputs.innerHTML = '';
-
-      // Load saved explore mode settings
-      const exploreModeSettings = loadExploreModeSettings();
-
-      // Create the required number of model selects
-      for (let i = 0; i < modelCount; i++) {
-        // Create main model selection group
-        const newGroup = document.createElement('div');
-        newGroup.className = 'model-input-group';
-
-        const label = document.createElement('label');
-        label.setAttribute('for', `model-${i}`);
-        label.textContent = `Model ${i + 1}:`;
-
-        const select = document.createElement('select');
-        select.id = `model-${i}`;
-        select.className = 'model-select';
-
-        newGroup.appendChild(label);
-        newGroup.appendChild(select);
-        modelInputs.appendChild(newGroup);
-
-        // Populate the select with the current selection if available
-        const currentValue =
-          i < currentSelections.length ? currentSelections[i] : null;
-        populateModelSelect(select, i, currentValue);
-
-        // Create container for max tokens and explore mode input groups
-        const inputGroupsContainer = document.createElement('div');
-        inputGroupsContainer.className = 'input-groups-container';
-
-        // Create max tokens input group
-        const maxTokensGroup = document.createElement('div');
-        maxTokensGroup.className = 'max-tokens-input-group';
-
-        // Create label for max tokens
-        const maxTokensLabel = document.createElement('label');
-        maxTokensLabel.setAttribute('for', `max-tokens-${i}`);
-        maxTokensLabel.textContent = `Max Completion Tokens:`;
-
-        // Create input for max tokens
-        const maxTokensInput = document.createElement('input');
-        maxTokensInput.type = 'number';
-        maxTokensInput.id = `max-tokens-${i}`;
-        maxTokensInput.className = 'max-tokens-input';
-        maxTokensInput.min = '0';
-        maxTokensInput.max = '1024';
-        maxTokensInput.step = '128';
-        maxTokensInput.placeholder = '512';
-
-        // Load saved max tokens value if available
-        const savedMaxTokens = loadFromLocalStorage(`max-tokens-${i}`, '512');
-        maxTokensInput.value = savedMaxTokens;
-
-        // Add event listener for max tokens input
-        maxTokensInput.addEventListener('change', () => {
-          let value = parseInt(maxTokensInput.value);
-          // Ensure the value is within the valid range
-          value = Math.max(1, Math.min(value, 1024));
-          maxTokensInput.value = value.toString();
-          saveToLocalStorage(`max-tokens-${i}`, value.toString());
-        });
-
-        // Add elements to max tokens group
-        maxTokensGroup.appendChild(maxTokensLabel);
-        maxTokensGroup.appendChild(maxTokensInput);
-
-        // Create explore mode toggle group
-        const exploreGroup = document.createElement('div');
-        exploreGroup.className = 'explore-mode-input-group';
-
-        // Get model info for display name
-        const modelKey =
-          currentValue ||
-          (i < savedModelSelections.length
-            ? savedModelSelections[i]
-            : Object.keys(MODEL_INFO)[0]);
-        const modelInfo = MODEL_INFO[modelKey];
-        const displayName = getModelDisplayName(modelKey, i, modelInfo);
-        const modelName = `${displayName} ${i + 1}`;
-
-        // Create label with model name
-        const exploreLabel = document.createElement('label');
-        exploreLabel.textContent = `Explore Mode:`;
-
-        // Create toggle switch
-        const toggleContainer = document.createElement('div');
-        toggleContainer.className = 'toggle-switch';
-
-        const toggleInput = document.createElement('input');
-        toggleInput.type = 'checkbox';
-        toggleInput.id = `explore-mode-toggle-${i}`;
-
-        // Set toggle state from saved settings
-        const savedSetting = exploreModeSettings[i];
-        toggleInput.checked = savedSetting?.enabled || false;
-
-        const toggleSlider = document.createElement('span');
-        toggleSlider.className = 'toggle-slider';
-
-        toggleContainer.appendChild(toggleInput);
-        toggleContainer.appendChild(toggleSlider);
-
-        // Create container for num requests input and label
-        const numRequestsContainer = document.createElement('div');
-        numRequestsContainer.className = toggleInput.checked
-          ? 'num-requests-container'
-          : 'num-requests-container hidden';
-
-        // Create label for n (number of requests)
-        const numRequestsLabel = document.createElement('label');
-        numRequestsLabel.textContent = 'Num Choices:';
-        numRequestsLabel.setAttribute('for', `explore-mode-num-requests-${i}`);
-        numRequestsLabel.style.marginRight = '5px';
-
-        // Create input for n (number of requests)
-        const numRequestsInput = document.createElement('input');
-        numRequestsInput.type = 'number';
-        numRequestsInput.id = `explore-mode-num-requests-${i}`;
-        numRequestsInput.className = 'num-requests-input';
-        numRequestsInput.min = '1';
-        numRequestsInput.max = '8';
-        numRequestsInput.value = (savedSetting?.numRequests || 3).toString();
-
-        // Add label and input to container
-        numRequestsContainer.appendChild(numRequestsLabel);
-        numRequestsContainer.appendChild(numRequestsInput);
-
-        // Add event listener for toggle
-        toggleInput.addEventListener('change', () => {
-          // Show/hide number requests container based on toggle state
-          if (toggleInput.checked) {
-            numRequestsContainer.classList.remove('hidden');
-          } else {
-            numRequestsContainer.classList.add('hidden');
-          }
-
-          // Update settings
-          const settings = loadExploreModeSettings();
-          settings[i] = {
-            enabled: toggleInput.checked,
-            numRequests: parseInt(numRequestsInput.value),
-          };
-          saveExploreModeSettings(settings);
-
-          // Update explore mode container visibility
-          updateExploreModeContainerVisibility();
-        });
-
-        // Add click handler to the toggle switch container for better usability
-        toggleContainer.addEventListener('click', (e) => {
-          // Prevent double triggering when clicking directly on the checkbox
-          // Also check if the input is disabled
-          if (e.target !== toggleInput && !toggleInput.disabled) {
-            toggleInput.checked = !toggleInput.checked;
-
-            // Manually trigger the change event
-            const changeEvent = new Event('change');
-            toggleInput.dispatchEvent(changeEvent);
-          }
-        });
-
-        // Add event listener for number input
-        numRequestsInput.addEventListener('change', () => {
-          // Ensure value is within range
-          let value = parseInt(numRequestsInput.value);
-          value = Math.max(1, Math.min(value, 8));
-          numRequestsInput.value = value.toString();
-
-          // Update settings
-          const settings = loadExploreModeSettings();
-          settings[i] = {
-            enabled: toggleInput.checked,
-            numRequests: value,
-          };
-          saveExploreModeSettings(settings);
-        });
-
-        // Add elements to input group
-        exploreGroup.appendChild(exploreLabel);
-        exploreGroup.appendChild(toggleContainer);
-        exploreGroup.appendChild(numRequestsContainer);
-
-        // Add both groups to the container
-        inputGroupsContainer.appendChild(maxTokensGroup);
-        inputGroupsContainer.appendChild(exploreGroup);
-
-        // Add the container to the model inputs
-        modelInputs.appendChild(inputGroupsContainer);
-      }
-
-      // Update explore mode container visibility
-      updateExploreModeContainerVisibility();
-    } catch (error) {
-      // Display error message
-      const errorMessage = `Error: ${error instanceof Error ? error.message : String(error)}`;
-
-      // If this is an OpenRouter-related error, show it in the auth message container
-      if (errorMessage.toLowerCase().includes('openrouter')) {
-        showAuthMessage(errorMessage, true);
-      } else {
-        // For other errors, use the conversation output
-        addOutputMessage('System', errorMessage);
-      }
-    }
-  }
-
-  // Load saved explore mode settings
-  function loadExploreModeSettings(): ExploreModeSettings {
-    return loadFromLocalStorage('exploreModeSettings', {});
-  }
-
-  // Save explore mode settings
-  function saveExploreModeSettings(settings: ExploreModeSettings) {
-    saveToLocalStorage('exploreModeSettings', settings);
-  }
-
-  // Function removed - explore mode inputs are now created directly in updateModelInputs
-
-  // Update explore mode container visibility based on settings
-  function updateExploreModeContainerVisibility() {
-    const settings = loadExploreModeSettings();
-    const isAnyEnabled = Object.values(settings).some(
-      (setting) => setting.enabled
-    );
-
-    // Check if there are active explore outputs that haven't been selected yet
-    const hasActiveExploreOutputs = exploreModeOutputs.children.length > 0;
-
-    // Show the container if at least one model has explore mode enabled OR if there are active outputs
-    exploreModeContainer.style.display = (isAnyEnabled || hasActiveExploreOutputs) ? 'block' : 'none';
-  }
-
-  // Handle selection of a response in explore mode
-  function handleExploreSelection(responseId: string) {
-    if (activeConversation) {
-      activeConversation.handleSelection(responseId);
-    }
-  }
-
-  // Create explore mode output element
-  function createExploreOutput(
-    responseId: string,
-    actor: string,
-    content: string,
-    isSelected: boolean = false
-  ) {
-    // Check if output already exists
-    let outputElement = document.getElementById(responseId);
-
-    if (!outputElement) {
-      // Create new output element
-      outputElement = document.createElement('div');
-      outputElement.id = responseId;
-      outputElement.className = 'explore-output';
-      if (isSelected) {
-        outputElement.classList.add('selected');
-      }
-
-      // Create header
-      const header = document.createElement('div');
-      header.className = 'explore-output-header';
-
-      // Add actor name
-      const actorSpan = document.createElement('span');
-      actorSpan.textContent = actor;
-      header.appendChild(actorSpan);
-
-      // Add select button
-      const selectButton = document.createElement('button');
-      selectButton.className = 'explore-select-button';
-      selectButton.textContent = 'Select';
-      selectButton.addEventListener('click', () => {
-        handleExploreSelection(responseId);
-      });
-      header.appendChild(selectButton);
-
-      // Create content
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'explore-output-content';
-      contentDiv.textContent = content;
-      contentDiv.style.whiteSpace = wordWrapToggle.checked ? 'pre-wrap' : 'pre';
-      contentDiv.style.fontSize = `${currentFontSize}px`;
-
-      // Add elements to output
-      outputElement.appendChild(header);
-      outputElement.appendChild(contentDiv);
-
-      // Add output to container
-      exploreModeOutputs.appendChild(outputElement);
-
-      // Add click handler to the whole output for selection
-      outputElement.addEventListener('click', (e) => {
-        // Don't trigger if clicking on the button (it has its own handler)
-        if (
-          e.target !== selectButton &&
-          !selectButton.contains(e.target as Node)
-        ) {
-          handleExploreSelection(responseId);
-        }
-      });
-    } else {
-      // Update existing output
-      const contentDiv = outputElement.querySelector('.explore-output-content');
-      if (contentDiv) {
-        contentDiv.textContent = content;
-        (contentDiv as HTMLElement).style.whiteSpace = wordWrapToggle.checked
-          ? 'pre-wrap'
-          : 'pre';
-        (contentDiv as HTMLElement).style.fontSize = `${currentFontSize}px`;
-      }
-
-      // Update selected state
-      if (isSelected) {
-        outputElement.classList.add('selected');
-      } else {
-        outputElement.classList.remove('selected');
-      }
-    }
-
-    return outputElement;
-  }
-
-  // Selection callback for explore mode
   const exploreSelectionCallback: SelectionCallback = (responseId: string) => {
-    // Get all explore outputs
-    const outputs = exploreModeOutputs.querySelectorAll('.explore-output');
-
-    // Update selected state
-    outputs.forEach((output) => {
-      if (output.id === responseId) {
-        output.classList.add('selected');
-      } else {
-        output.classList.remove('selected');
-      }
-    });
-
-    // Clear explore outputs immediately after selection
-    exploreModeOutputs.innerHTML = '';
-    // Update container visibility now that outputs are cleared
-    updateExploreModeContainerVisibility();
+    exploreModeController.confirmSelection(responseId);
+    exploreModeController.updateVisibility(settings.exploreModeSettings || {});
   };
 
-  // Create OpenRouter autocomplete field
-  async function createOpenRouterAutocomplete(
-    select: HTMLSelectElement,
-    index: number
-  ) {
-    // Create container for autocomplete
-    const container = document.createElement('div');
-    container.id = `openrouter-autocomplete-${index}`;
-    container.className = 'openrouter-autocomplete-container';
-
-    // Create subgroup with label (similar to model-input-group)
-    const subgroup = document.createElement('div');
-    subgroup.className = 'model-input-subgroup';
-
-    // Create label
-    const labelElement = document.createElement('label');
-    labelElement.textContent = 'OpenRouter:';
-    labelElement.setAttribute('for', `openrouter-model-${index}`);
-
-    // Create input field
-    const input = document.createElement('input');
-    input.id = `openrouter-model-${index}`;
-    input.type = 'text';
-    input.className = 'openrouter-autocomplete-input';
-    input.placeholder = 'Search OpenRouter models...';
-
-    // Create dropdown for results
-    const dropdown = document.createElement('div');
-    dropdown.className = 'openrouter-autocomplete-dropdown';
-    dropdown.style.display = 'none';
-
-    // Add elements to container
-    subgroup.appendChild(labelElement);
-    subgroup.appendChild(input);
-    container.appendChild(subgroup);
-    container.appendChild(dropdown);
-
-    // Find the model-input-group parent and insert after it
-    const modelInputGroup = select.closest('.model-input-group');
-    if (modelInputGroup && modelInputGroup.parentNode) {
-      modelInputGroup.parentNode.insertBefore(
-        container,
-        modelInputGroup.nextSibling
-      );
-    } else {
-      console.error('Cannot insert autocomplete: model input group not found');
-      return;
-    }
-
-    // Try to load previously selected model
-    const savedModel = loadFromLocalStorage(
-      `openrouter_custom_model_${index}`,
-      null
-    );
-    if (savedModel) {
-      try {
-        const savedModelData = JSON.parse(savedModel);
-        input.value = savedModelData.name || '';
-        input.dataset.id = savedModelData.id || '';
-      } catch (e) {
-        console.error('Error parsing saved model:', e);
-      }
-    }
-
-    // Load OpenRouter models
-    try {
-      const models = await fetchOpenRouterModels(openrouterKeyInput.value);
-
-      // Function to filter and display models
-      const filterModels = (query: string) => {
-        dropdown.innerHTML = '';
-        dropdown.style.display = 'block';
-
-        const filteredModels = query
-          ? models.filter(
-              (model) =>
-                model.id.toLowerCase().includes(query.toLowerCase()) ||
-                (model.name &&
-                  model.name.toLowerCase().includes(query.toLowerCase()))
-            )
-          : models;
-
-        // Limit to first 10 results
-        const displayModels = filteredModels.slice(0, 10);
-
-        if (displayModels.length === 0) {
-          const noResults = document.createElement('div');
-          noResults.className = 'openrouter-autocomplete-item';
-          noResults.textContent = 'No models found';
-          dropdown.appendChild(noResults);
-        } else {
-          displayModels.forEach((model) => {
-            const item = document.createElement('div');
-            item.className = 'openrouter-autocomplete-item';
-            item.textContent = model.name || model.id;
-
-            // Add click handler
-            item.addEventListener('click', () => {
-              input.value = model.name || model.id;
-              input.dataset.id = model.id;
-              dropdown.style.display = 'none';
-
-              // Save selected model
-              saveToLocalStorage(
-                `openrouter_custom_model_${index}`,
-                JSON.stringify({
-                  id: model.id,
-                  name: model.name || model.id,
-                })
-              );
-            });
-
-            dropdown.appendChild(item);
-          });
-        }
-      };
-
-      // Initial filter
-      filterModels('');
-
-      // Add input event listener
-      input.addEventListener('input', () => {
-        filterModels(input.value);
-      });
-
-      // Add focus event listener
-      input.addEventListener('focus', () => {
-        filterModels(input.value);
-      });
-
-      // Close dropdown when clicking outside
-      document.addEventListener('click', (event) => {
-        if (!container.contains(event.target as Node)) {
-          dropdown.style.display = 'none';
-        }
-      });
-    } catch (error) {
-      console.error('Error loading OpenRouter models:', error);
-
-      // Show error in dropdown
-      const errorItem = document.createElement('div');
-      errorItem.className = 'openrouter-autocomplete-item error';
-      errorItem.textContent =
-        'Error loading models. Please check your API key.';
-      dropdown.innerHTML = '';
-      dropdown.appendChild(errorItem);
-      dropdown.style.display = 'block';
-    }
-  }
-
-  // Populate a single model select
-  function populateModelSelect(
-    select: HTMLSelectElement,
-    index?: number,
-    currentValue?: string | null
-  ) {
-    select.innerHTML = '';
-
-    // Get current API keys
-    const apiKeys = {
-      hyperbolic: hyperbolicKeyInput.value,
-      openrouter: openrouterKeyInput.value,
-    };
-
-    // Remove any existing autocomplete field
-    if (index !== undefined) {
-      const existingAutocomplete = document.getElementById(
-        `openrouter-autocomplete-${index}`
-      );
-      if (existingAutocomplete) {
-        existingAutocomplete.remove();
-      }
-    }
-
-    // Add model options
-    Object.keys(MODEL_INFO).forEach((modelKey) => {
-      const modelInfo = MODEL_INFO[modelKey];
-      const company = modelInfo.company;
-
-      // Create option element
-      const option = document.createElement('option');
-      option.value = modelKey;
-
-      // Determine if this model's API key is available
-      let apiKeyAvailable = false;
-      let apiKeyName = '';
-
-      if (company === 'hyperbolic' || company === 'hyperbolic_completion') {
-        apiKeyAvailable = !!apiKeys.hyperbolic;
-        apiKeyName = 'Hyperbolic';
-      } else if (company === 'openrouter') {
-        apiKeyAvailable = !!apiKeys.openrouter;
-        apiKeyName = 'OpenRouter';
-      }
-
-      // Set option text with API key info
-      const displayName =
-        index !== undefined
-          ? getModelDisplayName(modelKey, index, modelInfo)
-          : modelInfo.display_name;
-      option.textContent = `${displayName} (${modelKey}) - ${apiKeyName}`;
-
-      // Add a visual indicator if API key is missing
-      if (!apiKeyAvailable) {
-        option.textContent += ' [API Key Missing]';
-        option.style.color = '#999';
-      }
-
-      select.appendChild(option);
-    });
-
-    // Set selected value based on priority:
-    // 1. Use currentValue if provided (from current selections)
-    // 2. Otherwise use saved model selections if available
-    if (currentValue) {
-      select.value = currentValue;
-    } else if (
-      index !== undefined &&
-      savedModelSelections &&
-      savedModelSelections[index]
-    ) {
-      select.value = savedModelSelections[index];
-    }
-
-    // Add change event listener to save selection and handle OpenRouter custom selector
-    select.addEventListener('change', (event) => {
-      saveModelSelections();
-
-      // Check if this is the OpenRouter custom selector
-      if (index !== undefined) {
-        const selectedModelKey = select.value;
-        const modelInfo = MODEL_INFO[selectedModelKey];
-
-        // Remove any existing autocomplete field
-        const existingAutocomplete = document.getElementById(
-          `openrouter-autocomplete-${index}`
-        );
-        if (existingAutocomplete) {
-          existingAutocomplete.remove();
-        }
-
-        // If this is the OpenRouter custom selector and API key is available, show autocomplete
-        if (modelInfo && modelInfo.is_custom_selector && apiKeys.openrouter) {
-          createOpenRouterAutocomplete(select, index);
-        }
-      }
-    });
-
-    // Check if the current selection is the OpenRouter custom selector and show autocomplete if needed
-    if (index !== undefined) {
-      const currentValue = select.value;
-      const modelInfo = MODEL_INFO[currentValue];
-      if (modelInfo && modelInfo.is_custom_selector && apiKeys.openrouter) {
-        createOpenRouterAutocomplete(select, index);
-      }
-    }
-  }
+  modelController = createModelSelectorController({
+    modelInputs,
+    templateSelect,
+    hyperbolicKeyInput,
+    openrouterKeyInput,
+    getSettings: () => settings,
+    updateSettings,
+    exploreModeController,
+    getWordWrap: () => wordWrapToggle.checked,
+    getFontSize: () => currentFontSize,
+    showAuthMessage,
+    addSystemMessage: (message: string) => addOutputMessage('System', message),
+    getTemplateModelCount,
+  });
 
   // Populate template select
   async function populateTemplateSelect() {
@@ -1389,8 +592,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // Update model inputs based on selected template
-      await updateModelInputs(templateSelect.value);
+      if (modelController) {
+        await modelController.renderForTemplate(templateSelect.value);
+      }
     } catch (error) {
       console.error('Error loading templates:', error);
       addOutputMessage(
@@ -1402,18 +606,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Save seed when changed
   seedInput.addEventListener('change', () => {
-    saveToLocalStorage('seed', seedInput.value);
+    updateSettings({ seed: seedInput.value });
   });
 
   // Save template selection when changed and update model inputs
   templateSelect.addEventListener('change', async () => {
-    saveToLocalStorage('templateSelection', templateSelect.value);
-    await updateModelInputs(templateSelect.value);
+    updateSettings({ selectedTemplate: templateSelect.value });
+    if (modelController) {
+      await modelController.renderForTemplate(templateSelect.value);
+    }
   });
 
   // Initialize UI
   populateTemplateSelect();
-  initializeTemplateEditor();
+  initializeTemplateEditor(templateSelect);
 
   // Create pause/resume buttons
   const pauseButton = document.createElement('button');
@@ -1432,10 +638,96 @@ document.addEventListener('DOMContentLoaded', () => {
   startButton.parentNode?.insertBefore(pauseButton, startButton.nextSibling);
   pauseButton.parentNode?.insertBefore(resumeButton, pauseButton.nextSibling);
 
+  const templateButtons = [
+    document.getElementById('edit-current-template') as HTMLButtonElement | null,
+    document.getElementById('import-template') as HTMLButtonElement | null,
+    document.getElementById('edit-custom-template') as HTMLButtonElement | null,
+  ].filter((button): button is HTMLButtonElement => Boolean(button));
+
+  function setTemplateButtonsDisabled(disabled: boolean): void {
+    templateButtons.forEach((button) => {
+      button.disabled = disabled;
+    });
+  }
+
+  conversationLifecycle = createConversationLifecycleController(
+    {
+      startButton,
+      pauseButton,
+      resumeButton,
+      exportButton,
+      maxTurnsInput,
+      seedInput,
+      loadButton,
+      modelSelectsContainer: modelInputs,
+      templateSelect,
+    },
+    {
+      onBeforeStart: () => {
+        usageController.reset();
+        conversationOutput.innerHTML = '';
+        exploreModeController.clearOutputs();
+        exploreModeController.updateVisibility(settings.exploreModeSettings || {});
+        setTemplateButtonsDisabled(true);
+      },
+      onAfterStart: () => {
+        const exploreModeSettings = settings.exploreModeSettings || {};
+        const isExploreEnabled = Object.values(exploreModeSettings).some(
+          (setting) => setting?.enabled
+        );
+        if (isExploreEnabled) {
+          pauseButton.style.display = 'none';
+          resumeButton.style.display = 'none';
+        }
+      },
+      onComplete: (result) => {
+        exploreModeController.clearOutputs();
+        exploreModeController.updateVisibility(settings.exploreModeSettings || {});
+        setTemplateButtonsDisabled(false);
+
+        if (result.status === 'stopped' && result.reason) {
+          addOutputMessage('System', result.reason);
+        }
+        if (result.status === 'error') {
+          const message =
+            result.error instanceof Error
+              ? result.error.message
+              : String(result.error);
+          addOutputMessage('System', `Error: ${message}`);
+        }
+      },
+    }
+  );
+
+  conversationLifecycle.setSelectionCallback(exploreSelectionCallback);
+
   // Handle button clicks
-  startButton.addEventListener('click', handleStartStopButton);
-  pauseButton.addEventListener('click', handlePauseButton);
-  resumeButton.addEventListener('click', handleResumeButton);
+  startButton.addEventListener('click', () => {
+    if (!conversationLifecycle) {
+      return;
+    }
+
+    if (conversationLifecycle.isRunning()) {
+      conversationLifecycle.stop('Stopped by user.');
+      addOutputMessage('System', 'Conversation stopped by user.');
+      return;
+    }
+
+    conversationLifecycle
+      .start(() => createConversationInstance())
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        addOutputMessage('System', `Error: ${message}`);
+      });
+  });
+
+  pauseButton.addEventListener('click', () => {
+    conversationLifecycle?.pause();
+  });
+
+  resumeButton.addEventListener('click', () => {
+    conversationLifecycle?.resume();
+  });
 
   // Add load file input to the document body
   document.body.appendChild(loadFileInput);
@@ -1494,483 +786,112 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Initialize template editor
-  function initializeTemplateEditor() {
-    const editCurrentTemplateBtn = document.getElementById(
-      'edit-current-template'
-    ) as HTMLButtonElement;
-    const importTemplateBtn = document.getElementById(
-      'import-template'
-    ) as HTMLButtonElement;
-    const templateFileInput = document.getElementById(
-      'template-file-input'
-    ) as HTMLInputElement;
-    const templateEditorForm = document.getElementById(
-      'template-editor-form'
-    ) as HTMLDivElement;
-    const templateNameInput = document.getElementById(
-      'template-name'
-    ) as HTMLInputElement;
-    const templateDescriptionInput = document.getElementById(
-      'template-description'
-    ) as HTMLInputElement;
-    const templateContentTextarea = document.getElementById(
-      'template-content'
-    ) as HTMLTextAreaElement;
-    const saveTemplateBtn = document.getElementById(
-      'save-template'
-    ) as HTMLButtonElement;
-    const exportTemplateBtn = document.getElementById(
-      'export-template'
-    ) as HTMLButtonElement;
-    const clearCustomTemplateBtn = document.getElementById(
-      'clear-custom-template'
-    ) as HTMLButtonElement;
-    const clearCustomTemplateStatusBtn = document.getElementById(
-      'clear-custom-template-status'
-    ) as HTMLButtonElement;
-    const cancelEditBtn = document.getElementById(
-      'cancel-edit'
-    ) as HTMLButtonElement;
-    const customTemplateStatus = document.getElementById(
-      'custom-template-status'
-    ) as HTMLDivElement;
-    const customTemplateName = document.getElementById(
-      'custom-template-name'
-    ) as HTMLSpanElement;
-    const editCustomTemplateBtn = document.getElementById(
-      'edit-custom-template'
-    ) as HTMLButtonElement;
 
-    // Create a container for template editor error messages
-    const templateErrorContainer = document.createElement('div');
-    templateErrorContainer.className = 'template-error-container';
-    templateErrorContainer.style.display = 'none';
-    templateErrorContainer.style.marginTop = '15px';
-    templateErrorContainer.style.marginBottom = '15px';
-    templateErrorContainer.style.padding = '8px 10px';
-    templateErrorContainer.style.border = '1px solid #000000';
-    templateErrorContainer.style.fontSize = '14px';
-    templateErrorContainer.style.fontFamily = 'Times New Roman, serif';
-    templateErrorContainer.style.backgroundColor = '#EEEEEE';
-    templateErrorContainer.style.color = '#FF0000';
-    templateErrorContainer.style.position = 'relative';
-    templateErrorContainer.style.width = '100%';
-    templateErrorContainer.style.boxSizing = 'border-box';
-
-    // Create dismiss button (X)
-    const dismissButton = document.createElement('button');
-    dismissButton.textContent = '×'; // × is the multiplication sign, looks like an X
-    dismissButton.style.position = 'absolute';
-    dismissButton.style.right = '5px';
-    dismissButton.style.top = '5px';
-    dismissButton.style.background = 'none';
-    dismissButton.style.border = 'none';
-    dismissButton.style.fontSize = '16px';
-    dismissButton.style.fontWeight = 'bold';
-    dismissButton.style.cursor = 'pointer';
-    dismissButton.style.padding = '0 5px';
-    dismissButton.style.lineHeight = '1';
-    dismissButton.title = 'Dismiss';
-
-    // Create message element
-    const messageElement = document.createElement('div');
-    messageElement.style.paddingRight = '20px'; // Make room for the X button
-
-    // Add elements to container
-    templateErrorContainer.appendChild(dismissButton);
-    templateErrorContainer.appendChild(messageElement);
-
-    // Add container to the template editor form
-    templateEditorForm.appendChild(templateErrorContainer);
-
-    // Add click handler to dismiss button
-    dismissButton.addEventListener('click', () => {
-      templateErrorContainer.style.display = 'none';
-    });
-
-    // Function to show template error messages
-    function showTemplateError(message: string) {
-      messageElement.textContent = message;
-      templateErrorContainer.style.display = 'block';
+  async function createConversationInstance(): Promise<Conversation> {
+    if (!modelController) {
+      throw new Error('Model controller is not ready.');
     }
 
-    // Check if custom template exists and update UI
-    function updateCustomTemplateStatus() {
-      const customTemplate = getCustomTemplate();
-
-      if (customTemplate) {
-        customTemplateName.textContent = customTemplate.name;
-        customTemplateStatus.style.display = 'block';
-
-        // Add "Custom" option to template select if not already present
-        let customOptionExists = false;
-        for (let i = 0; i < templateSelect.options.length; i++) {
-          if (templateSelect.options[i].value === 'custom') {
-            customOptionExists = true;
-            break;
-          }
-        }
-
-        if (!customOptionExists) {
-          const customOption = document.createElement('option');
-          customOption.value = 'custom';
-          // Show both name and description
-          customOption.textContent = customTemplate.description
-            ? `Custom: ${customTemplate.name} - ${customTemplate.description}`
-            : `Custom: ${customTemplate.name}`;
-          templateSelect.appendChild(customOption);
-        } else {
-          // Update the text of the custom option
-          for (let i = 0; i < templateSelect.options.length; i++) {
-            if (templateSelect.options[i].value === 'custom') {
-              // Show both name and description
-              templateSelect.options[i].textContent = customTemplate.description
-                ? `Custom: ${customTemplate.name} - ${customTemplate.description}`
-                : `Custom: ${customTemplate.name}`;
-              break;
-            }
-          }
-        }
-      } else {
-        customTemplateStatus.style.display = 'none';
-
-        // Remove "Custom" option from template select if present
-        for (let i = 0; i < templateSelect.options.length; i++) {
-          if (templateSelect.options[i].value === 'custom') {
-            templateSelect.remove(i);
-            break;
-          }
-        }
-      }
+    const models = modelController.getSelectedModels();
+    if (models.length === 0) {
+      throw new Error('Select at least one model.');
     }
 
-    // Edit current template
-    editCurrentTemplateBtn.addEventListener('click', async () => {
-      const currentTemplate = templateSelect.value;
+    const templateName = templateSelect.value;
+    const maxTurns = maxTurnsInput.value ? parseInt(maxTurnsInput.value, 10) : Infinity;
+    const maxTokensPerModel = modelController.getMaxTokensPerModel();
 
-      try {
-        let templateContent: string;
-        let templateName: string;
-        let templateDescription: string = '';
-
-        if (currentTemplate === 'custom') {
-          // Edit existing custom template
-          const customTemplate = getCustomTemplate();
-          if (customTemplate) {
-            templateContent = customTemplate.content;
-            templateName = customTemplate.name;
-            templateDescription = customTemplate.description || '';
-          } else {
-            throw new Error('Custom template not found');
-          }
-        } else {
-          // Load built-in template
-          const response = await fetch(
-            `./public/templates/${currentTemplate}.jsonl`
-          );
-          if (!response.ok) {
-            throw new Error(`Template '${currentTemplate}' not found.`);
-          }
-          templateContent = await response.text();
-          templateName = `${currentTemplate} (Custom)`;
-
-          // Try to get description from available templates
-          const templates = await getAvailableTemplates();
-          const templateInfo = templates.find(
-            (t) => t.name === currentTemplate
-          );
-          if (templateInfo) {
-            templateDescription = templateInfo.description || '';
-          }
-        }
-
-        // Populate editor form
-        templateNameInput.value = templateName;
-        templateDescriptionInput.value = templateDescription;
-        templateContentTextarea.value = templateContent;
-
-        // Show editor form
-        templateEditorForm.style.display = 'block';
-      } catch (error) {
-        console.error('Error loading template for editing:', error);
-        showTemplateError(
-          `Error loading template: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
-    });
-
-    // Import template
-    importTemplateBtn.addEventListener('click', () => {
-      templateFileInput.click();
-    });
-
-    // Handle file selection
-    templateFileInput.addEventListener('change', (event) => {
-      const files = (event.target as HTMLInputElement).files;
-      if (!files || files.length === 0) return;
-
-      const file = files[0];
-      const reader = new FileReader();
-
-      reader.onload = (e) => {
-        const content = e.target?.result as string;
-
-        // Validate JSONL content
-        try {
-          const lines = content.trim().split('\n');
-          for (const line of lines) {
-            if (line.trim()) {
-              JSON.parse(line); // This will throw if invalid JSON
-            }
-          }
-
-          // Populate editor form
-          templateNameInput.value = file.name.replace('.jsonl', '');
-          templateDescriptionInput.value = ''; // Clear description field for imported templates
-          templateContentTextarea.value = content;
-
-          // Show editor form
-          templateEditorForm.style.display = 'block';
-        } catch (error) {
-          console.error('Invalid JSONL file:', error);
-          showTemplateError(
-            'Invalid JSONL file. Please check the file format.'
-          );
-        }
-      };
-
-      reader.onerror = () => {
-        showTemplateError('Failed to read the file.');
-      };
-
-      reader.readAsText(file);
-
-      // Reset file input
-      templateFileInput.value = '';
-    });
-
-    // Save template
-    saveTemplateBtn.addEventListener('click', () => {
-      const name = templateNameInput.value.trim();
-      const content = templateContentTextarea.value.trim();
-
-      if (!name) {
-        showTemplateError('Template name is required.');
-        return;
-      }
-
-      if (!content) {
-        showTemplateError('Template content is required.');
-        return;
-      }
-
-      // Validate JSONL content
-      try {
-        const lines = content.split('\n');
-        for (const line of lines) {
-          if (line.trim()) {
-            JSON.parse(line); // This will throw if invalid JSON
-          }
-        }
-
-        // Get description
-        const description = templateDescriptionInput.value.trim();
-
-        // Save custom template
-        saveCustomTemplate({
-          name,
-          description,
-          content,
-          originalName:
-            templateSelect.value !== 'custom'
-              ? templateSelect.value
-              : undefined,
-          lastModified: Date.now(),
-        });
-
-        // Update UI
-        templateEditorForm.style.display = 'none';
-        updateCustomTemplateStatus();
-
-        // Select custom template
-        for (let i = 0; i < templateSelect.options.length; i++) {
-          if (templateSelect.options[i].value === 'custom') {
-            templateSelect.selectedIndex = i;
-            break;
-          }
-        }
-
-        // Trigger change event to update model inputs
-        const event = new Event('change');
-        templateSelect.dispatchEvent(event);
-
-        // Show success message
-        showTemplateError(`Custom template "${name}" saved successfully.`);
-      } catch (error) {
-        console.error('Invalid JSONL content:', error);
-        showTemplateError('Invalid JSONL content. Please check the format.');
-      }
-    });
-
-    // Export template
-    exportTemplateBtn.addEventListener('click', () => {
-      const name = templateNameInput.value.trim() || 'template';
-      const content = templateContentTextarea.value.trim();
-
-      if (!content) {
-        showTemplateError('No content to export.');
-        return;
-      }
-
-      // Create blob and download
-      const blob = new Blob([content], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${name}.jsonl`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    });
-
-    // Clear custom template
-    const handleClearCustomTemplate = () => {
-      clearCustomTemplate();
-      updateCustomTemplateStatus();
-
-      // If custom template was selected, switch to first available template
-      if (
-        templateSelect.value === 'custom' &&
-        templateSelect.options.length > 0
-      ) {
-        templateSelect.selectedIndex = 0;
-
-        // Trigger change event to update model inputs
-        const event = new Event('change');
-        templateSelect.dispatchEvent(event);
-      }
-
-      showTemplateError('Custom template cleared.');
+    const apiKeys: ApiKeys = {
+      hyperbolicApiKey: hyperbolicKeyInput.value,
+      openrouterApiKey: openrouterKeyInput.value,
     };
 
-    clearCustomTemplateBtn.addEventListener('click', handleClearCustomTemplate);
-    clearCustomTemplateStatusBtn.addEventListener(
-      'click',
-      handleClearCustomTemplate
+    const requiredApis: Record<string, string> = {};
+    for (const model of models) {
+      const company = MODEL_INFO[model].company;
+      if (company === 'hyperbolic' || company === 'hyperbolic_completion') {
+        requiredApis['hyperbolicApiKey'] = 'Hyperbolic API Key';
+      } else if (company === 'openrouter') {
+        requiredApis['openrouterApiKey'] = 'OpenRouter API Key';
+      }
+    }
+
+    const missingKeys = Object.entries(requiredApis)
+      .filter(([key]) => !apiKeys[key as keyof ApiKeys])
+      .map(([, name]) => name);
+
+    if (missingKeys.length > 0) {
+      throw new Error(`Missing required API key(s): ${missingKeys.join(', ')}`);
+    }
+
+    const templateModelCount = await getTemplateModelCount(templateName);
+    if (templateModelCount !== models.length) {
+      throw new Error(
+        `Invalid template: Number of models (${models.length}) does not match the template (${templateModelCount})`
+      );
+    }
+
+    const configs = await loadTemplate(templateName, models);
+    const systemPrompts = configs.map((config) => config.system_prompt || null);
+    const contexts = configs.map((config) => config.context || []);
+
+    const exploreModeSettings = settings.exploreModeSettings || {};
+    const seedValue = seedInput.value.trim();
+    const seed = seedValue ? parseInt(seedValue, 10) : undefined;
+
+    addOutputMessage(
+      'System',
+      `Starting conversation with template "${templateName}"...`
     );
 
-    // Cancel editing
-    cancelEditBtn.addEventListener('click', () => {
-      templateEditorForm.style.display = 'none';
-      templateNameInput.value = '';
-      templateDescriptionInput.value = '';
-      templateContentTextarea.value = '';
+    return new Conversation({
+      models,
+      systemPrompts,
+      contexts,
+      apiKeys,
+      maxTurns,
+      maxTokens: maxTokensPerModel,
+      onOutput: addOutputMessage,
+      seed,
+      exploreModeSettings,
+      onSelection: exploreSelectionCallback,
+      onUsage: (modelDisplayName, usage) => {
+        usageController.track(modelDisplayName, usage);
+      },
+      maxTokensProvider: (modelIndex) =>
+        maxTokensPerModel[modelIndex] ?? 512,
+      exploreSettingsProvider: () => settings.exploreModeSettings || {},
+      customModelResolver: (modelIndex) => loadCustomModel(modelIndex)?.id || null,
     });
-
-    // Edit custom template
-    editCustomTemplateBtn.addEventListener('click', () => {
-      const customTemplate = getCustomTemplate();
-
-      if (customTemplate) {
-        templateNameInput.value = customTemplate.name;
-        templateDescriptionInput.value = customTemplate.description || '';
-        templateContentTextarea.value = customTemplate.content;
-        templateEditorForm.style.display = 'block';
-      }
-    });
-
-    // Initialize
-    updateCustomTemplateStatus();
-  }
-
-  // Handle start/stop button click
-  function handleStartStopButton() {
-    if (isConversationRunning) {
-      stopConversation();
-    } else {
-      startConversation();
-    }
-  }
-
-  // Handle pause button click
-  function handlePauseButton() {
-    if (activeConversation && isConversationRunning) {
-      activeConversation.pause();
-
-      // Update UI
-      pauseButton.style.display = 'none';
-      resumeButton.style.display = 'inline-block';
-
-      // Ensure max turns, max output length, seed, and load conversation button remain disabled
-      maxTurnsInput.disabled = true;
-      // maxOutputLengthInput no longer exists
-      seedInput.disabled = true;
-      loadButton.disabled = true;
-    }
-  }
-
-  // Handle resume button click
-  function handleResumeButton() {
-    if (activeConversation && isConversationRunning) {
-      activeConversation.resume();
-
-      // Update UI
-      pauseButton.style.display = 'inline-block';
-      resumeButton.style.display = 'none';
-
-      // Ensure max turns, seed, and load conversation button remain disabled
-      maxTurnsInput.disabled = true;
-      seedInput.disabled = true;
-      loadButton.disabled = true;
-    }
-  }
-
-  // Stop the active conversation
-  function stopConversation() {
-    if (activeConversation) {
-      activeConversation.stop();
-      addOutputMessage('System', 'Conversation stopped by user.');
-    }
-
-    // Clear any pending explore mode choices
-    exploreModeOutputs.innerHTML = '';
-    updateExploreModeContainerVisibility();
   }
 
   // Load conversation from a text file
   function loadConversation(text: string) {
     // Stop any active conversation (should never happen as button is disabled when started)
-    if (activeConversation && isConversationRunning) {
-      stopConversation();
+    if (conversationLifecycle?.isRunning()) {
+      conversationLifecycle.stop('Loading previous conversation.');
     }
 
     // Clear existing conversation
     conversationOutput.innerHTML = '';
 
     try {
-      // Use regex to find all message blocks
-      // Each message starts with a header line "### Actor [timestamp] ###"
-      const messageRegex = /### (.*?) \[(.*?)\] ###\n([\s\S]*?)(?=\n### |$)/g;
-      let match;
+      const entries = parseConversationLog(text);
+      if (entries.length === 0) {
+        addOutputMessage(
+          'System',
+          'No messages found in the provided conversation log.'
+        );
+      } else {
+        entries.forEach((entry) => {
+          addOutputMessage(entry.actor, entry.content);
+        });
 
-      while ((match = messageRegex.exec(text)) !== null) {
-        const actor = match[1];
-        const timestamp = match[2];
-        const content = match[3].trim();
+        // Show export button after loading
+        exportButton.style.display = 'block';
 
-        if (content) {
-          // Add the message to the UI
-          addOutputMessage(actor, content);
-        }
+        addOutputMessage('System', 'Conversation loaded successfully.');
       }
-
-      // Show export button after loading
-      exportButton.style.display = 'block';
-
-      // Add a system message indicating successful load
-      addOutputMessage('System', 'Conversation loaded successfully.');
     } catch (error) {
       console.error('Error parsing conversation:', error);
       addOutputMessage(
@@ -1982,14 +903,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Export conversation to a file
   function exportConversation() {
-    const conversationText = Array.from(conversationOutput.children)
-      .map((child) => {
-        const header = child.querySelector('.actor-header')?.textContent || '';
-        const content =
-          child.querySelector('.response-content')?.textContent || '';
-        return `${header}\n${content}\n`;
-      })
-      .join('\n');
+    const entries = extractConversationLogFromDom(conversationOutput);
+    const conversationText = formatConversationLog(entries);
 
     const blob = new Blob([conversationText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -2020,15 +935,18 @@ document.addEventListener('DOMContentLoaded', () => {
       elementId &&
       elementId.startsWith('clear-explore-outputs-')
     ) {
-      exploreModeOutputs.innerHTML = '';
+      exploreModeController.clearOutputs();
+      exploreModeController.updateVisibility(settings.exploreModeSettings || {});
       return;
     }
 
     // Check if this is an explore mode message
     if (elementId && elementId.startsWith('explore-')) {
-      // Create or update explore output
-      // The selection state will be managed by the exploreSelectionCallback
-      createExploreOutput(elementId, actor, content);
+      exploreModeController.renderOutput({
+        responseId: elementId,
+        actor,
+        content,
+      });
       return;
     }
 
@@ -2100,221 +1018,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Start conversation
-  async function startConversation() {
-    // Hide export button when starting a new conversation
-    exportButton.style.display = 'none';
-
-    // Clear previous output
-    conversationOutput.innerHTML = '';
-
-    // Reset usage tracking for new conversation
-    resetUsageTracking();
-
-    // Get all model selects
-    const allModelSelects = document.querySelectorAll(
-      '.model-select'
-    ) as NodeListOf<HTMLSelectElement>;
-
-    // Get selected models
-    const models: string[] = Array.from(allModelSelects).map(
-      (select) => select.value
-    );
-
-    // Get template
-    const templateName = templateSelect.value;
-
-    // Get max turns
-    const maxTurns = maxTurnsInput.value
-      ? parseInt(maxTurnsInput.value)
-      : Infinity;
-
-    // Get max tokens for each model
-    const maxTokensPerModel: number[] = [];
-    for (let i = 0; i < models.length; i++) {
-      const maxTokensInput = document.getElementById(
-        `max-tokens-${i}`
-      ) as HTMLInputElement;
-      let maxTokens = maxTokensInput.value
-        ? parseInt(maxTokensInput.value)
-        : 512;
-      // Ensure the value is within the valid range
-      maxTokens = Math.max(1, Math.min(maxTokens, 1024));
-      maxTokensPerModel.push(maxTokens);
-    }
-
-    // Disable max turns, max output length, seed fields, load conversation button,
-    // and explore mode controls when conversation is in the "started" state (even if paused)
-    maxTurnsInput.disabled = true;
-    seedInput.disabled = true;
-    loadButton.disabled = true;
-
-    // Disable model and template dropdowns
-    allModelSelects.forEach((select) => {
-      select.disabled = true;
-    });
-    templateSelect.disabled = true;
-
-    // Disable template-related buttons
-    const templateButtons = [
-      document.getElementById('edit-current-template') as HTMLButtonElement,
-      document.getElementById('import-template') as HTMLButtonElement,
-      document.getElementById('edit-custom-template') as HTMLButtonElement,
-    ];
-
-    templateButtons.forEach((button) => {
-      if (button) {
-        button.disabled = true;
-      }
-    });
-
-    // Get API keys
-    const apiKeys: ApiKeys = {
-      hyperbolicApiKey: hyperbolicKeyInput.value,
-      openrouterApiKey: openrouterKeyInput.value,
-    };
-
-    // Validate required API keys
-    const requiredApis: Record<string, string> = {};
-
-    for (const model of models) {
-      const company = MODEL_INFO[model].company;
-      if (company === 'hyperbolic' || company === 'hyperbolic_completion') {
-        requiredApis['hyperbolicApiKey'] = 'Hyperbolic API Key';
-      } else if (company === 'openrouter') {
-        requiredApis['openrouterApiKey'] = 'OpenRouter API Key';
-      }
-    }
-
-    // Check if any required API keys are missing
-    const missingKeys: string[] = [];
-    for (const [key, name] of Object.entries(requiredApis)) {
-      if (!apiKeys[key as keyof ApiKeys]) {
-        missingKeys.push(name);
-      }
-    }
-
-    if (missingKeys.length > 0) {
-      addOutputMessage(
-        'System',
-        `Error: Missing required API key(s): ${missingKeys.join(', ')}`
-      );
-      return;
-    }
-
-    try {
-      // Update UI to show we're in conversation mode
-      startButton.textContent = 'Stop Conversation';
-      startButton.classList.add('stop');
-      isConversationRunning = true;
-
-      // Verify template exists and has the correct number of models
-      try {
-        const templateModelCount = await getTemplateModelCount(templateName);
-        if (templateModelCount !== models.length) {
-          throw new Error(
-            `Invalid template: Number of models (${models.length}) does not match the number of elements in the template (${templateModelCount})`
-          );
-        }
-      } catch (error) {
-        throw new Error(
-          `Invalid template: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
-
-      // Load template config
-      const configs = await loadTemplate(templateName, models);
-
-      // Extract system prompts and contexts
-      const systemPrompts = configs.map(
-        (config) => config.system_prompt || null
-      );
-      const contexts = configs.map((config) => config.context || []);
-
-      // Get seed value if provided
-      let seed: number | undefined = undefined;
-      if (seedInput.value.trim()) {
-        seed = parseInt(seedInput.value);
-      }
-
-      // Get explore mode settings
-      const exploreModeSettings = loadExploreModeSettings();
-
-      // Check if any model has explore mode enabled
-      const isExploreEnabled = Object.values(exploreModeSettings).some(
-        (setting) => setting.enabled
-      );
-
-      // Only show pause button if no model has explore mode enabled
-      pauseButton.style.display = isExploreEnabled ? 'none' : 'inline-block';
-
-      // Make sure the explore mode container is visible if needed
-      exploreModeContainer.style.display = isExploreEnabled ? 'block' : 'none';
-
-      // Clear explore mode outputs
-      exploreModeOutputs.innerHTML = '';
-
-      // Start conversation
-      activeConversation = new Conversation(
-        models,
-        systemPrompts,
-        contexts,
-        apiKeys,
-        maxTurns,
-        maxTokensPerModel,
-        addOutputMessage,
-        seed,
-        exploreModeSettings,
-        exploreSelectionCallback,
-        updateUsageWithResponse
-      );
-
-      addOutputMessage(
-        'System',
-        `Starting conversation with template "${templateName}"...`
-      );
-      await activeConversation.start();
-    } catch (error) {
-      console.error('Conversation error:', error);
-      addOutputMessage(
-        'System',
-        `Error: ${error instanceof Error ? error.message : String(error)}`
-      );
-    } finally {
-      // Reset UI on error
-      isConversationRunning = false;
-      startButton.textContent = 'Start Conversation';
-      startButton.classList.remove('stop');
-      pauseButton.style.display = 'none';
-      resumeButton.style.display = 'none';
-      exportButton.style.display = 'block';
-
-      // Re-enable model and template dropdowns
-      allModelSelects.forEach((select) => {
-        select.disabled = false;
-      });
-      templateSelect.disabled = false;
-
-      // Re-enable template-related buttons
-      const templateButtons = [
-        document.getElementById('edit-current-template') as HTMLButtonElement,
-        document.getElementById('import-template') as HTMLButtonElement,
-        document.getElementById('edit-custom-template') as HTMLButtonElement,
-      ];
-
-      templateButtons.forEach((button) => {
-        if (button) {
-          button.disabled = false;
-        }
-      });
-
-      // Re-enable max turns, seed fields and load conversation button
-      maxTurnsInput.disabled = false;
-      seedInput.disabled = false;
-      loadButton.disabled = false;
-    }
-  }
-
-  // Initialize usage tracking
-  initializeUsageTracking();
+  window.addEventListener('beforeunload', () => {
+    unsubscribeSettings();
+  });
 });

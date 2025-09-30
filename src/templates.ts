@@ -1,19 +1,56 @@
 import { TemplateConfig, Message, CustomTemplate } from './types';
 import { MODEL_INFO } from './models';
 import { getModelDisplayName } from './utils';
+import {
+  saveTemplate as persistTemplate,
+  deleteTemplate,
+  getTemplate as fetchStoredTemplate,
+} from './state/templateStore';
+
+const CUSTOM_TEMPLATE_ID = 'custom';
+
+function mapToStoredTemplate(template: CustomTemplate) {
+  const existing = fetchStoredTemplate(CUSTOM_TEMPLATE_ID);
+  const updatedAt = new Date(template.lastModified || Date.now()).toISOString();
+  return {
+    id: CUSTOM_TEMPLATE_ID,
+    name: template.name,
+    description: template.description,
+    content: template.content,
+    createdAt: existing?.createdAt || updatedAt,
+    updatedAt,
+    source: 'custom' as const,
+    metadata: {
+      originalName: template.originalName,
+      lastModified: template.lastModified,
+    },
+  };
+}
 
 // Custom template storage functions
 export function saveCustomTemplate(template: CustomTemplate): void {
-  localStorage.setItem('customTemplate', JSON.stringify(template));
+  persistTemplate(mapToStoredTemplate(template));
 }
 
 export function getCustomTemplate(): CustomTemplate | null {
-  const stored = localStorage.getItem('customTemplate');
-  return stored ? JSON.parse(stored) : null;
+  const stored = fetchStoredTemplate(CUSTOM_TEMPLATE_ID);
+  if (!stored) {
+    return null;
+  }
+
+  return {
+    name: stored.name,
+    description: stored.description || '',
+    content: stored.content,
+    originalName: (stored.metadata?.originalName as string | undefined) || stored.source,
+    lastModified:
+      (stored.metadata?.lastModified as number | undefined) ||
+      new Date(stored.updatedAt).getTime(),
+  };
 }
 
 export function clearCustomTemplate(): void {
-  localStorage.removeItem('customTemplate');
+  deleteTemplate(CUSTOM_TEMPLATE_ID);
 }
 
 export async function loadTemplate(
