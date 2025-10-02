@@ -328,7 +328,7 @@ input:disabled + .toggle-slider:before {
 
 .collapse-indicator {
   font-size: 12px;
-  transition: transform 0.3s ease;
+  transition: none;
 }
 
 .collapsed .collapse-indicator {
@@ -337,7 +337,7 @@ input:disabled + .toggle-slider:before {
 
 .collapsible-content {
   padding: 10px;
-  transition: max-height 0.3s ease, opacity 0.3s ease;
+  transition: none;
   max-height: 1000px;
   opacity: 1;
   overflow: hidden;
@@ -630,7 +630,7 @@ input:disabled + .toggle-slider:before {
   min-height: 22px; /* Ensure stable height */
   visibility: visible; /* Use visibility instead of display for stable layout */
   opacity: 1;
-  transition: opacity 0.2s ease;
+  transition: none;
 }
 
 .num-requests-container.hidden {
