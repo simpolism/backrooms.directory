@@ -22,7 +22,10 @@ function readSettings(): StoredSettings {
     return existing;
   }
 
-  const stored = loadFromLocalStorage(SETTINGS_STORAGE_KEY, null);
+  const stored = loadFromLocalStorage<StoredSettings | null>(
+    SETTINGS_STORAGE_KEY,
+    null
+  );
   if (stored && typeof stored === 'object') {
     const merged: StoredSettings = {
       ...DEFAULT_SETTINGS,

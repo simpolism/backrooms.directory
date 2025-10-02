@@ -1,4 +1,5 @@
 import { loadCustomModel } from './persistence/customModels';
+import { ModelInfo } from './types';
 
 export function generateDistinctColors() {
   let hue = 0;
@@ -67,7 +68,7 @@ export function getRgbColor(rgb: [number, number, number]): string {
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
 
-export function saveToLocalStorage(key: string, value: any): void {
+export function saveToLocalStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (error) {
@@ -75,13 +76,10 @@ export function saveToLocalStorage(key: string, value: any): void {
   }
 }
 
-export function loadFromLocalStorage(
-  key: string,
-  defaultValue: any = null
-): any {
+export function loadFromLocalStorage<T>(key: string, defaultValue: T): T {
   try {
     const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : defaultValue;
+    return value ? (JSON.parse(value) as T) : defaultValue;
   } catch (error) {
     console.error(`Error loading from local storage: ${error}`);
     return defaultValue;
@@ -91,7 +89,7 @@ export function loadFromLocalStorage(
 export function getModelDisplayName(
   model: string,
   modelIndex: number,
-  modelInfo: any
+  modelInfo: ModelInfo
 ): string {
   if (modelInfo.is_custom_selector) {
     const saved = loadCustomModel(modelIndex);

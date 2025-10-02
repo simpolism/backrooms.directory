@@ -5,6 +5,26 @@ interface NoRetryError extends Error {
   noRetry?: boolean;
 }
 
+interface OpenRouterChatCompletionRequest {
+  model: string;
+  messages: Array<{ role: Message['role']; content: string }>;
+  temperature: number;
+  max_tokens: number;
+  stream: true;
+  usage: { include: boolean };
+  seed?: number;
+}
+
+interface HyperbolicCompletionRequest {
+  model: string;
+  temperature: number;
+  max_tokens: number;
+  prompt: string;
+  stop: string[];
+  stream: true;
+  seed?: number;
+}
+
 // Helper function to retry a function with exponential backoff
 async function withRetry<T>(
   fn: () => Promise<T>,
@@ -162,7 +182,7 @@ export async function openrouterConversation(
     messages.unshift({ role: 'system', content: systemPrompt });
   }
 
-  const requestBody: any = {
+  const requestBody: OpenRouterChatCompletionRequest = {
     model,
     messages,
     temperature: 1.0,
@@ -302,7 +322,7 @@ export async function hyperbolicCompletionConversation(
     'Content-Type': 'application/json',
   };
 
-  const payload: any = {
+  const payload: HyperbolicCompletionRequest = {
     model,
     temperature: 1.0,
     max_tokens: maxTokens,

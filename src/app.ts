@@ -4,9 +4,7 @@ import { Conversation } from './conversation';
 import {
   loadTemplate,
   getAvailableTemplates,
-  saveCustomTemplate,
   getCustomTemplate,
-  clearCustomTemplate,
 } from './templates';
 import {
   generateDistinctColors,
@@ -157,7 +155,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Load saved collapse state
-    const savedState = loadFromLocalStorage(`collapse-${sectionId}`, null);
+    const savedState = loadFromLocalStorage<string | null>(
+      `collapse-${sectionId}`,
+      null
+    );
     if (savedState !== null) {
       if (savedState === 'true') {
         section.classList.add('collapsed');
@@ -937,8 +938,9 @@ document.addEventListener('DOMContentLoaded', () => {
     actor: string,
     content: string,
     elementId?: string,
-    isLoading: boolean = false
+    _isLoading?: boolean
   ) {
+    void _isLoading;
     // Check if this is a special message to clear explore outputs
     if (
       content === 'clear-explore-outputs' &&

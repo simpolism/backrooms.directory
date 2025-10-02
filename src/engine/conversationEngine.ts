@@ -1,6 +1,3 @@
-/* eslint-env browser */
-/* global AbortController, AbortSignal, setTimeout, console */
-
 import {
   Message,
   ApiKeys,

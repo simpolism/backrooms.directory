@@ -1,4 +1,4 @@
-import { TemplateConfig, Message, CustomTemplate } from './types';
+import { TemplateConfig, CustomTemplate } from './types';
 import { MODEL_INFO } from './models';
 import { getModelDisplayName } from './utils';
 import {

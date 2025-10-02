@@ -8,7 +8,10 @@ function readTemplates(): StoredTemplate[] {
     return cachedTemplates;
   }
 
-  const stored = loadFromLocalStorage(TEMPLATES_STORAGE_KEY, []);
+  const stored = loadFromLocalStorage<StoredTemplate[]>(
+    TEMPLATES_STORAGE_KEY,
+    []
+  );
   if (Array.isArray(stored)) {
     cachedTemplates = stored.map((template) => ({ ...template }));
     return cachedTemplates;

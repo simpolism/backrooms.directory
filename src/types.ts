@@ -15,10 +15,6 @@ export interface TemplateConfig {
   context: Message[];
 }
 
-export interface ApiClients {
-  openai?: any;
-}
-
 export interface ConversationOptions {
   models: string[];
   template: string;

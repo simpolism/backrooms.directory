@@ -70,7 +70,10 @@ export function createModelSelectorController(
     }
 
     try {
-      const cached = loadFromLocalStorage('openrouterModelsCache', null);
+      const cached = loadFromLocalStorage<string | null>(
+        'openrouterModelsCache',
+        null
+      );
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
