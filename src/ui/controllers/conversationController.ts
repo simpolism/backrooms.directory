@@ -26,7 +26,9 @@ export interface ConversationLifecycleHooks {
 }
 
 export interface ConversationLifecycleController {
-  start(factory: () => Promise<Conversation>): Promise<ConversationCompletionReason>;
+  start(
+    factory: () => Promise<Conversation>
+  ): Promise<ConversationCompletionReason>;
   stop(reason?: string): void;
   pause(): void;
   resume(): void;
@@ -55,7 +57,9 @@ export function createConversationLifecycleController(
 
   function setRunning(running: boolean) {
     state.running = running;
-    ui.startButton.textContent = running ? 'Stop Conversation' : 'Start Conversation';
+    ui.startButton.textContent = running
+      ? 'Stop Conversation'
+      : 'Start Conversation';
     ui.startButton.classList.toggle('stop', running);
   }
 
@@ -76,7 +80,9 @@ export function createConversationLifecycleController(
     ui.resumeButton.style.display = resumeVisible ? 'inline-block' : 'none';
   }
 
-  async function runConversation(factory: () => Promise<Conversation>): Promise<void> {
+  async function runConversation(
+    factory: () => Promise<Conversation>
+  ): Promise<void> {
     toggleConfiguration(true);
     ui.exportButton.style.display = 'none';
     updatePauseResume(true, false);
@@ -107,17 +113,17 @@ export function createConversationLifecycleController(
       updatePauseResume(false, false);
       ui.exportButton.style.display = 'block';
       state.conversation = null;
-    const completion = state.completionReason || { status: 'completed' };
-    hooks.onComplete?.(completion);
-    state.completionReason = null;
+      const completion = state.completionReason || { status: 'completed' };
+      hooks.onComplete?.(completion);
+      state.completionReason = null;
+    }
   }
-}
 
-function stopConversation(reason?: string) {
-  if (!state.conversation) {
-    return;
-  }
-  state.completionReason = { status: 'stopped', reason };
+  function stopConversation(reason?: string) {
+    if (!state.conversation) {
+      return;
+    }
+    state.completionReason = { status: 'stopped', reason };
     state.conversation.stop();
     setRunning(false);
     toggleConfiguration(false);
@@ -129,7 +135,10 @@ function stopConversation(reason?: string) {
   return {
     async start(factory) {
       if (state.running) {
-        return { status: 'stopped', reason: 'already running' } as ConversationCompletionReason;
+        return {
+          status: 'stopped',
+          reason: 'already running',
+        } as ConversationCompletionReason;
       }
       try {
         await runConversation(factory);

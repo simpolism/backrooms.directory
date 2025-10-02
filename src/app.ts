@@ -301,7 +301,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize word wrap with saved value
   wordWrapToggle.checked = settings.outputWordWrap ?? true;
-  conversationOutput.style.whiteSpace = wordWrapToggle.checked ? 'pre-wrap' : 'pre';
+  conversationOutput.style.whiteSpace = wordWrapToggle.checked
+    ? 'pre-wrap'
+    : 'pre';
 
   // Initialize auto-scroll with saved value
   const autoScrollToggle = document.getElementById(
@@ -639,7 +641,9 @@ document.addEventListener('DOMContentLoaded', () => {
   pauseButton.parentNode?.insertBefore(resumeButton, pauseButton.nextSibling);
 
   const templateButtons = [
-    document.getElementById('edit-current-template') as HTMLButtonElement | null,
+    document.getElementById(
+      'edit-current-template'
+    ) as HTMLButtonElement | null,
     document.getElementById('import-template') as HTMLButtonElement | null,
     document.getElementById('edit-custom-template') as HTMLButtonElement | null,
   ].filter((button): button is HTMLButtonElement => Boolean(button));
@@ -667,7 +671,9 @@ document.addEventListener('DOMContentLoaded', () => {
         usageController.reset();
         conversationOutput.innerHTML = '';
         exploreModeController.clearOutputs();
-        exploreModeController.updateVisibility(settings.exploreModeSettings || {});
+        exploreModeController.updateVisibility(
+          settings.exploreModeSettings || {}
+        );
         setTemplateButtonsDisabled(true);
       },
       onAfterStart: () => {
@@ -682,7 +688,9 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       onComplete: (result) => {
         exploreModeController.clearOutputs();
-        exploreModeController.updateVisibility(settings.exploreModeSettings || {});
+        exploreModeController.updateVisibility(
+          settings.exploreModeSettings || {}
+        );
         setTemplateButtonsDisabled(false);
 
         if (result.status === 'stopped' && result.reason) {
@@ -798,7 +806,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const templateName = templateSelect.value;
-    const maxTurns = maxTurnsInput.value ? parseInt(maxTurnsInput.value, 10) : Infinity;
+    const maxTurns = maxTurnsInput.value
+      ? parseInt(maxTurnsInput.value, 10)
+      : Infinity;
     const maxTokensPerModel = modelController.getMaxTokensPerModel();
 
     const apiKeys: ApiKeys = {
@@ -858,10 +868,10 @@ document.addEventListener('DOMContentLoaded', () => {
       onUsage: (modelDisplayName, usage) => {
         usageController.track(modelDisplayName, usage);
       },
-      maxTokensProvider: (modelIndex) =>
-        maxTokensPerModel[modelIndex] ?? 512,
+      maxTokensProvider: (modelIndex) => maxTokensPerModel[modelIndex] ?? 512,
       exploreSettingsProvider: () => settings.exploreModeSettings || {},
-      customModelResolver: (modelIndex) => loadCustomModel(modelIndex)?.id || null,
+      customModelResolver: (modelIndex) =>
+        loadCustomModel(modelIndex)?.id || null,
     });
   }
 
@@ -936,7 +946,9 @@ document.addEventListener('DOMContentLoaded', () => {
       elementId.startsWith('clear-explore-outputs-')
     ) {
       exploreModeController.clearOutputs();
-      exploreModeController.updateVisibility(settings.exploreModeSettings || {});
+      exploreModeController.updateVisibility(
+        settings.exploreModeSettings || {}
+      );
       return;
     }
 

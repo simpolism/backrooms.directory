@@ -97,7 +97,9 @@ export function getModelDisplayName(
     const saved = loadCustomModel(modelIndex);
     if (saved?.name) {
       const colonIndex = saved.name.indexOf(': ');
-      return colonIndex >= 0 ? saved.name.substring(colonIndex + 2) : saved.name;
+      return colonIndex >= 0
+        ? saved.name.substring(colonIndex + 2)
+        : saved.name;
     }
     return 'OpenRouter Custom';
   }

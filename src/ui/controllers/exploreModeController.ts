@@ -42,7 +42,9 @@ export function createExploreModeController(
   }
 
   function ensureOutput(payload: ExploreOutputPayload): HTMLDivElement {
-    let output = document.getElementById(payload.responseId) as HTMLDivElement | null;
+    let output = document.getElementById(
+      payload.responseId
+    ) as HTMLDivElement | null;
 
     if (!output) {
       output = document.createElement('div');

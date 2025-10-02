@@ -42,7 +42,8 @@ export function getCustomTemplate(): CustomTemplate | null {
     name: stored.name,
     description: stored.description || '',
     content: stored.content,
-    originalName: (stored.metadata?.originalName as string | undefined) || stored.source,
+    originalName:
+      (stored.metadata?.originalName as string | undefined) || stored.source,
     lastModified:
       (stored.metadata?.lastModified as number | undefined) ||
       new Date(stored.updatedAt).getTime(),

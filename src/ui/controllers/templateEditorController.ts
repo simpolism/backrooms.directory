@@ -182,7 +182,9 @@ export function initializeTemplateEditor(
         templateName = customTemplate.name;
         templateDescription = customTemplate.description || '';
       } else {
-        const response = await fetch(`./public/templates/${currentTemplate}.jsonl`);
+        const response = await fetch(
+          `./public/templates/${currentTemplate}.jsonl`
+        );
         if (!response.ok) {
           throw new Error(`Template '${currentTemplate}' not found.`);
         }

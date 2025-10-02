@@ -8,7 +8,8 @@ const CONVERSATION_HEADER_REGEX = /^###\s+(.*?)\s+\[(.*?)\]\s+###$/;
 
 export function parseConversationLog(text: string): ConversationLogEntry[] {
   const entries: ConversationLogEntry[] = [];
-  const messageRegex = /###\s+(.*?)\s+\[(.*?)\]\s+###\n([\s\S]*?)(?=\n###\s|$)/g;
+  const messageRegex =
+    /###\s+(.*?)\s+\[(.*?)\]\s+###\n([\s\S]*?)(?=\n###\s|$)/g;
   let match: RegExpExecArray | null;
 
   while ((match = messageRegex.exec(text)) !== null) {
@@ -28,7 +29,8 @@ export function extractConversationLogFromDom(
   container: HTMLElement
 ): ConversationLogEntry[] {
   const entries: ConversationLogEntry[] = [];
-  const responseElements = container.querySelectorAll<HTMLElement>('.actor-response');
+  const responseElements =
+    container.querySelectorAll<HTMLElement>('.actor-response');
 
   responseElements.forEach((element) => {
     const headerText = element

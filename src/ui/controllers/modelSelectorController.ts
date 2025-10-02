@@ -1,5 +1,9 @@
 import { MODEL_INFO } from '../../models';
-import { getModelDisplayName, loadFromLocalStorage, saveToLocalStorage } from '../../utils';
+import {
+  getModelDisplayName,
+  loadFromLocalStorage,
+  saveToLocalStorage,
+} from '../../utils';
 import { ExploreModeSettings, ModelInfo } from '../../types';
 import { ExploreModeController } from './exploreModeController';
 import { StoredSettings } from '../../state/schema';
@@ -24,7 +28,11 @@ interface ModelSelectorControllerOptions {
   exploreModeController: ExploreModeController;
   getWordWrap: () => boolean;
   getFontSize: () => number;
-  showAuthMessage: (message: string, isError?: boolean, duration?: number) => void;
+  showAuthMessage: (
+    message: string,
+    isError?: boolean,
+    duration?: number
+  ) => void;
   addSystemMessage: (message: string) => void;
   getTemplateModelCount: (templateName: string) => Promise<number>;
 }
@@ -54,7 +62,9 @@ export function createModelSelectorController(
     };
   }
 
-  async function fetchOpenRouterModels(apiKey: string): Promise<OpenRouterModelSummary[]> {
+  async function fetchOpenRouterModels(
+    apiKey: string
+  ): Promise<OpenRouterModelSummary[]> {
     if (!apiKey) {
       return [];
     }
@@ -64,7 +74,10 @@ export function createModelSelectorController(
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          if (parsed.timestamp && Date.now() - parsed.timestamp < 1000 * 60 * 60 * 24) {
+          if (
+            parsed.timestamp &&
+            Date.now() - parsed.timestamp < 1000 * 60 * 60 * 24
+          ) {
             return parsed.models || [];
           }
         } catch (error) {
@@ -81,7 +94,9 @@ export function createModelSelectorController(
       });
 
       if (!response.ok) {
-        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `OpenRouter API error: ${response.status} ${response.statusText}`
+        );
       }
 
       const data = await response.json();
@@ -101,9 +116,8 @@ export function createModelSelectorController(
   }
 
   function saveModelSelections(): void {
-    const selects = options.modelInputs.querySelectorAll<HTMLSelectElement>(
-      '.model-select'
-    );
+    const selects =
+      options.modelInputs.querySelectorAll<HTMLSelectElement>('.model-select');
     const models = Array.from(selects).map((select) => select.value);
     options.updateSettings({ modelSelections: models });
   }
@@ -140,7 +154,10 @@ export function createModelSelectorController(
 
     const modelInputGroup = select.closest('.model-input-group');
     if (modelInputGroup && modelInputGroup.parentElement) {
-      modelInputGroup.parentElement.insertBefore(container, modelInputGroup.nextSibling);
+      modelInputGroup.parentElement.insertBefore(
+        container,
+        modelInputGroup.nextSibling
+      );
     }
 
     const savedModel = loadCustomModel(index);
@@ -156,9 +173,11 @@ export function createModelSelectorController(
       dropdown.style.display = 'block';
 
       const filtered = query
-        ? models.filter((model) =>
-            model.id.toLowerCase().includes(query.toLowerCase()) ||
-            (model.name && model.name.toLowerCase().includes(query.toLowerCase()))
+        ? models.filter(
+            (model) =>
+              model.id.toLowerCase().includes(query.toLowerCase()) ||
+              (model.name &&
+                model.name.toLowerCase().includes(query.toLowerCase()))
           )
         : models;
 
@@ -301,7 +320,9 @@ export function createModelSelectorController(
         maxTokensInput.placeholder = '512';
 
         const savedMaxTokens = settings.maxTokensPerModel?.[i];
-        maxTokensInput.value = savedMaxTokens ? savedMaxTokens.toString() : '512';
+        maxTokensInput.value = savedMaxTokens
+          ? savedMaxTokens.toString()
+          : '512';
 
         maxTokensInput.addEventListener('change', () => {
           let value = parseInt(maxTokensInput.value, 10);
@@ -360,7 +381,10 @@ export function createModelSelectorController(
         numRequestsContainer.appendChild(numRequestsLabel);
         numRequestsContainer.appendChild(numRequestsInput);
 
-        const applyExploreSettings = (enabled: boolean, numRequests: number) => {
+        const applyExploreSettings = (
+          enabled: boolean,
+          numRequests: number
+        ) => {
           const nextSettings: ExploreModeSettings = {
             ...(options.getSettings().exploreModeSettings || {}),
             [i]: {
@@ -413,22 +437,30 @@ export function createModelSelectorController(
           const existingAutocomplete = document.getElementById(
             `openrouter-autocomplete-${i}`
           );
-        if (existingAutocomplete) {
-          existingAutocomplete.remove();
-        }
+          if (existingAutocomplete) {
+            existingAutocomplete.remove();
+          }
 
-        clearCustomModel(i);
+          clearCustomModel(i);
 
-        if (modelInfo && modelInfo.is_custom_selector && getApiKeys().openrouterApiKey) {
-          createOpenRouterAutocomplete(select, i).catch((error) => {
-            console.error('OpenRouter autocomplete error:', error);
-          });
-        }
+          if (
+            modelInfo &&
+            modelInfo.is_custom_selector &&
+            getApiKeys().openrouterApiKey
+          ) {
+            createOpenRouterAutocomplete(select, i).catch((error) => {
+              console.error('OpenRouter autocomplete error:', error);
+            });
+          }
         });
 
         if (select.value) {
           const modelInfo: ModelInfo = MODEL_INFO[select.value];
-          if (modelInfo && modelInfo.is_custom_selector && getApiKeys().openrouterApiKey) {
+          if (
+            modelInfo &&
+            modelInfo.is_custom_selector &&
+            getApiKeys().openrouterApiKey
+          ) {
             createOpenRouterAutocomplete(select, i).catch((error) => {
               console.error('OpenRouter autocomplete error:', error);
             });
@@ -448,7 +480,8 @@ export function createModelSelectorController(
   }
 
   function refreshModelSelects(): void {
-    const selects = options.modelInputs.querySelectorAll<HTMLSelectElement>('.model-select');
+    const selects =
+      options.modelInputs.querySelectorAll<HTMLSelectElement>('.model-select');
     selects.forEach((select, index) => {
       const currentValue = select.value;
       populateModelSelect(select, index, currentValue);
@@ -456,14 +489,16 @@ export function createModelSelectorController(
   }
 
   function getSelectedModels(): string[] {
-    const selects = options.modelInputs.querySelectorAll<HTMLSelectElement>('.model-select');
+    const selects =
+      options.modelInputs.querySelectorAll<HTMLSelectElement>('.model-select');
     return Array.from(selects).map((select) => select.value);
   }
 
   function getMaxTokensPerModel(): number[] {
-    const inputs = options.modelInputs.querySelectorAll<HTMLInputElement>(
-      '.max-tokens-input'
-    );
+    const inputs =
+      options.modelInputs.querySelectorAll<HTMLInputElement>(
+        '.max-tokens-input'
+      );
     return Array.from(inputs).map((input) => {
       const value = parseInt(input.value, 10);
       if (Number.isNaN(value)) {

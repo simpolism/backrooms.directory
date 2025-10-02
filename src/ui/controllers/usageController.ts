@@ -27,7 +27,8 @@ export function createUsageController(
   };
 
   function render(): void {
-    const { totalInputTokens, totalOutputTokens, totalTokens, totalCost } = usage;
+    const { totalInputTokens, totalOutputTokens, totalTokens, totalCost } =
+      usage;
     elements.totalInputTokens.textContent = totalInputTokens.toLocaleString();
     elements.totalOutputTokens.textContent = totalOutputTokens.toLocaleString();
     elements.totalTokens.textContent = totalTokens.toLocaleString();
