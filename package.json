@@ -7,10 +7,11 @@
     "build": "webpack --mode production",
     "dev": "webpack serve --mode development",
     "start": "webpack serve --mode development --open",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix",
-    "format": "prettier --write \"src/**/*.{ts,js,css,html}\" \"*.{ts,js,json,md}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,js,css,html}\" \"*.{ts,js,json,md}\""
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*\"",
+    "lint:fix": "eslint \"src/**/*\" --fix",
+    "format": "prettier --write \"src/**/*\" \"*.{ts,js,json,md}\"",
+    "format:check": "prettier --check \"src/**/*\" \"*.{ts,js,json,md}\""
   },
   "dependencies": {
     "core-js": "^3.36.0"

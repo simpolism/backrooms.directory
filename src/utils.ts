@@ -67,20 +67,6 @@ export function getRgbColor(rgb: [number, number, number]): string {
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
 
-export function formatTimestamp(): string {
-  const now = new Date();
-  return now
-    .toISOString()
-    .replace(/T/, '_')
-    .replace(/\..+/, '')
-    .replace(/:/g, '');
-}
-
-export function formatLogFilename(models: string[], template: string): string {
-  const timestamp = formatTimestamp();
-  return `${models.join('_')}_${template}_${timestamp}.txt`;
-}
-
 export function saveToLocalStorage(key: string, value: any): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
