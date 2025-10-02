@@ -34,33 +34,62 @@ export function createUsageController(
     elements.totalCost.textContent = totalCost.toFixed(4);
 
     const breakdownEntries = Object.entries(usage.modelBreakdown);
+    elements.usageBreakdown.innerHTML = '';
     if (breakdownEntries.length === 0) {
       elements.usageBreakdown.textContent = 'No usage recorded yet.';
       return;
     }
 
-    const breakdownList = document.createElement('ul');
-    breakdownList.className = 'usage-breakdown-list';
-
     breakdownEntries.forEach(([model, data]) => {
-      const item = document.createElement('li');
-      const description = [
-        `${model}:`,
-        `${data.promptTokens} prompt`,
-        `${data.completionTokens} completion`,
-        `${data.totalTokens} total`,
-      ];
+      const modelContainer = document.createElement('div');
+      modelContainer.className = 'model-usage';
+
+      const nameContainer = document.createElement('div');
+      nameContainer.className = 'model-name';
+      nameContainer.textContent = model;
+
+      const statsContainer = document.createElement('div');
+      statsContainer.className = 'model-stats';
+
+      const createStat = (label: string, value: string): HTMLDivElement => {
+        const stat = document.createElement('div');
+        stat.className = 'model-stat';
+
+        const statLabel = document.createElement('div');
+        statLabel.className = 'model-stat-label';
+        statLabel.textContent = label;
+
+        const statValue = document.createElement('div');
+        statValue.className = 'model-stat-value';
+        statValue.textContent = value;
+
+        stat.appendChild(statLabel);
+        stat.appendChild(statValue);
+
+        return stat;
+      };
+
+      statsContainer.appendChild(
+        createStat('Input', data.promptTokens.toLocaleString())
+      );
+      statsContainer.appendChild(
+        createStat('Output', data.completionTokens.toLocaleString())
+      );
+      statsContainer.appendChild(
+        createStat('Total', data.totalTokens.toLocaleString())
+      );
 
       if (data.cost !== undefined) {
-        description.push(`$${data.cost.toFixed(4)}`);
+        statsContainer.appendChild(
+          createStat('Cost', `$${data.cost.toFixed(4)}`)
+        );
       }
 
-      item.textContent = description.join(' | ');
-      breakdownList.appendChild(item);
-    });
+      modelContainer.appendChild(nameContainer);
+      modelContainer.appendChild(statsContainer);
 
-    elements.usageBreakdown.innerHTML = '';
-    elements.usageBreakdown.appendChild(breakdownList);
+      elements.usageBreakdown.appendChild(modelContainer);
+    });
   }
 
   return {
