@@ -73,6 +73,35 @@ document.addEventListener('DOMContentLoaded', () => {
   const exploreModeOutputs = document.getElementById(
     'explore-mode-outputs'
   ) as HTMLDivElement;
+  const toggleOutputFullscreenButton = document.getElementById(
+    'toggle-output-fullscreen'
+  ) as HTMLButtonElement;
+  const closeOutputFullscreenButton = document.getElementById(
+    'close-output-fullscreen'
+  ) as HTMLButtonElement;
+  const outputFullscreenModal = document.getElementById(
+    'output-fullscreen-modal'
+  ) as HTMLDivElement;
+  const outputFullscreenBackdrop = outputFullscreenModal.querySelector(
+    '.output-fullscreen-modal__backdrop'
+  ) as HTMLDivElement;
+  const outputFullscreenBody = outputFullscreenModal.querySelector(
+    '.output-fullscreen-modal__body'
+  ) as HTMLDivElement;
+  const conversationSection = document.querySelector(
+    '.conversation-section'
+  ) as HTMLDivElement;
+  const conversationSectionParent = conversationSection.parentElement;
+  const conversationSectionPlaceholder = document.createElement('div');
+  conversationSectionPlaceholder.id = 'conversation-section-placeholder';
+  conversationSectionPlaceholder.style.display = 'none';
+  conversationSectionParent?.insertBefore(
+    conversationSectionPlaceholder,
+    conversationSection.nextSibling
+  );
+  const conversationContainer = conversationSection.querySelector(
+    '.conversation-container'
+  ) as HTMLDivElement;
 
   // Create load conversation button and file input
   const loadButton = document.createElement('button');
@@ -139,6 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ) as HTMLInputElement;
 
   let currentFontSize = settings.outputFontSize ?? 12;
+  let isOutputFullscreen = false;
 
   // Initialize collapsible sections
   const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
@@ -496,6 +526,72 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateAutoScroll() {
     updateSettings({ outputAutoScroll: autoScrollToggle.checked });
   }
+
+  const fullscreenButtonLabels = {
+    enter: 'Full Screen',
+    exit: 'Exit Full Screen',
+  };
+
+  function openOutputFullscreen() {
+    if (isOutputFullscreen) {
+      return;
+    }
+
+    isOutputFullscreen = true;
+    document.body.classList.add('output-fullscreen-open');
+    outputFullscreenModal.classList.add('open');
+    outputFullscreenModal.setAttribute('aria-hidden', 'false');
+    conversationContainer.classList.add('conversation-container--fullscreen');
+    outputFullscreenBody.appendChild(conversationSection);
+    toggleOutputFullscreenButton.textContent = fullscreenButtonLabels.exit;
+    toggleOutputFullscreenButton.setAttribute('aria-expanded', 'true');
+    closeOutputFullscreenButton.focus();
+  }
+
+  function closeOutputFullscreen({ returnFocus = true } = {}) {
+    if (!isOutputFullscreen) {
+      return;
+    }
+
+    isOutputFullscreen = false;
+    document.body.classList.remove('output-fullscreen-open');
+    outputFullscreenModal.classList.remove('open');
+    outputFullscreenModal.setAttribute('aria-hidden', 'true');
+    conversationContainer.classList.remove('conversation-container--fullscreen');
+    if (conversationSectionPlaceholder.parentElement) {
+      conversationSectionPlaceholder.parentElement.insertBefore(
+        conversationSection,
+        conversationSectionPlaceholder
+      );
+    }
+    toggleOutputFullscreenButton.textContent = fullscreenButtonLabels.enter;
+    toggleOutputFullscreenButton.setAttribute('aria-expanded', 'false');
+    if (returnFocus) {
+      toggleOutputFullscreenButton.focus();
+    }
+  }
+
+  toggleOutputFullscreenButton.addEventListener('click', () => {
+    if (isOutputFullscreen) {
+      closeOutputFullscreen();
+    } else {
+      openOutputFullscreen();
+    }
+  });
+
+  closeOutputFullscreenButton.addEventListener('click', () => {
+    closeOutputFullscreen();
+  });
+
+  outputFullscreenBackdrop.addEventListener('click', () => {
+    closeOutputFullscreen();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && isOutputFullscreen) {
+      closeOutputFullscreen();
+    }
+  });
 
   // Load saved template selection if available
   const savedTemplateSelection = settings.selectedTemplate || '';

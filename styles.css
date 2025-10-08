@@ -165,6 +165,58 @@ select:disabled {
   font-size: 14px; /* Default font size */
 }
 
+.conversation-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.conversation-output-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.conversation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #000000;
+  background-color: #F7F7F7;
+  padding: 8px 10px;
+}
+
+.conversation-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.conversation-control__button {
+  margin-left: auto;
+}
+
+.conversation-controls .toggle-switch {
+  margin: 0;
+}
+
+.control-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.conversation-container--fullscreen {
+  flex: 1 1 auto;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+}
+
+.output-fullscreen-modal__body .conversation-section {
+  flex: 1 1 auto;
+  min-height: 0;
+}
 /* Output settings styles */
 .output-settings {
   margin-bottom: 15px;
@@ -194,7 +246,7 @@ select:disabled {
 .font-size-controls {
   display: flex;
   align-items: center;
-  width: 120px;
+  width: auto;
   max-width: 100%;
   justify-self: start;
 }
@@ -637,6 +689,90 @@ input:disabled + .toggle-slider:before {
   .template-jsonl-preview {
     max-height: none;
   }
+}
+
+/* Conversation Fullscreen Modal */
+.output-fullscreen-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 950;
+}
+
+.output-fullscreen-modal.open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.output-fullscreen-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+.output-fullscreen-modal__content {
+  position: relative;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.35);
+  width: calc(100% - 32px);
+  height: calc(100% - 32px);
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 18px 18px 20px;
+  box-sizing: border-box;
+}
+
+.output-fullscreen-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.output-fullscreen-modal__header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.output-fullscreen-modal__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.output-fullscreen-open {
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .output-fullscreen-modal__content {
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+    padding: 16px;
+  }
+
+  .conversation-control__button {
+    margin-left: 0;
+  }
+}
+
+.output-fullscreen-modal__body .conversation-output-wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.output-fullscreen-modal__body .conversation-container--fullscreen {
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Template Editor Modal */

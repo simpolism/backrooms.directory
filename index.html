@@ -123,33 +123,10 @@
       
       <div class="output-settings collapsible-section">
         <div class="collapsible-header">
-          <h2>Output Settings</h2>
+          <h2>Advanced Output Settings</h2>
           <span class="collapse-indicator">▼</span>
         </div>
         <div class="collapsible-content">
-          <div class="output-setting-group">
-            <label for="font-size">Font Size:</label>
-            <div class="font-size-controls">
-              <button id="decrease-font-size" class="font-size-btn">-</button>
-              <span id="current-font-size">12px</span>
-              <button id="increase-font-size" class="font-size-btn">+</button>
-            </div>
-          </div>
-          <div class="output-setting-group">
-            <label for="word-wrap-toggle">Word Wrap:</label>
-            <div class="toggle-switch">
-              <input type="checkbox" id="word-wrap-toggle" checked>
-              <span class="toggle-slider"></span>
-            </div>
-          </div>
-          <div class="output-setting-group">
-            <label for="auto-scroll-toggle">Auto-Scroll:</label>
-            <div class="toggle-switch">
-              <input type="checkbox" id="auto-scroll-toggle" checked>
-              <span class="toggle-slider"></span>
-            </div>
-          </div>
-          <hr class="settings-divider">
           <div class="output-setting-group">
             <label for="max-turns">Max Conversation Turns:</label>
             <input type="number" id="max-turns" placeholder="Default: infinity" min="1" class="output-setting-input">
@@ -198,14 +175,56 @@
       </div>
     </div>
     
-    <div class="conversation-container">
-      <div class="scroll-spacer"></div>
-      <div id="conversation-output" class="conversation-output"></div>
+    <div class="conversation-section">
+      <div id="conversation-output-wrapper" class="conversation-output-wrapper">
+        <div class="conversation-container">
+          <div class="scroll-spacer"></div>
+          <div id="conversation-output" class="conversation-output"></div>
+        </div>
+      </div>
+      <div class="conversation-controls" aria-label="Conversation display controls">
+        <div class="conversation-control">
+          <span class="control-label" id="font-size-label">Font Size</span>
+          <div class="font-size-controls" role="group" aria-labelledby="font-size-label">
+            <button id="decrease-font-size" class="font-size-btn" type="button" aria-label="Decrease font size">-</button>
+            <span id="current-font-size" aria-live="polite">12px</span>
+            <button id="increase-font-size" class="font-size-btn" type="button" aria-label="Increase font size">+</button>
+          </div>
+        </div>
+        <div class="conversation-control">
+          <label class="control-label" for="word-wrap-toggle">Word Wrap</label>
+          <div class="toggle-switch">
+            <input type="checkbox" id="word-wrap-toggle" checked>
+            <span class="toggle-slider"></span>
+          </div>
+        </div>
+        <div class="conversation-control">
+          <label class="control-label" for="auto-scroll-toggle">Auto-Scroll</label>
+          <div class="toggle-switch">
+            <input type="checkbox" id="auto-scroll-toggle" checked>
+            <span class="toggle-slider"></span>
+          </div>
+        </div>
+        <button id="toggle-output-fullscreen" class="secondary-button conversation-control__button" type="button" aria-expanded="false">
+          Full Screen
+        </button>
+      </div>
     </div>
     
     <div style="text-align: center; margin-top: 20px; font-size: 12px; color: #666666;">
       <hr>
       Last updated: March 2025 | <a href="https://github.com/simpolism/backrooms.directory" target="_blank">GitHub</a>
+    </div>
+  </div>
+
+  <div id="output-fullscreen-modal" class="output-fullscreen-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="output-fullscreen-modal__backdrop"></div>
+    <div class="output-fullscreen-modal__content" role="document">
+      <div class="output-fullscreen-modal__header">
+        <h2>Conversation Output</h2>
+        <button id="close-output-fullscreen" class="secondary-button" type="button">Exit Full Screen</button>
+      </div>
+      <div class="output-fullscreen-modal__body"></div>
     </div>
   </div>
 
