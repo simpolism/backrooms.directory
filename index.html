@@ -88,10 +88,14 @@
         <div class="collapsible-content">
           <!-- Template Editor Controls -->
           <div class="template-editor-controls">
-            <button id="edit-current-template" class="secondary-button">Edit Current Template</button>
+            <button id="edit-current-template" class="secondary-button">Customize Selected Template</button>
             <button id="import-template" class="secondary-button">Import Template</button>
             <button id="new-custom-template" class="secondary-button">New Custom Template</button>
             <input type="file" id="template-file-input" accept=".jsonl" style="display: none;">
+          </div>
+          <div class="template-editor-guidance">
+            <p>Work on whichever template is selected above. Built-in templates open as a copy you can save, while existing custom templates reopen for direct editing.</p>
+            <p>Imported files also open in the editor window, and anything you save lands in the list below for quick reuse.</p>
           </div>
           
           <div class="custom-templates-panel">
@@ -228,7 +232,7 @@
               </div>
 
               <p class="model-contexts-description">
-                Line 1 feeds Model 1, Line 2 feeds Model 2. Each line is saved as a JSON object containing the system prompt and context messages.
+                Line&nbsp;1 becomes the history that Model&nbsp;1 reads, and Line&nbsp;2 goes to Model&nbsp;2. The models talk to each other: in Model&nbsp;1's context, messages marked <code>user</code> describe Model&nbsp;2 speaking back (and vice versa for Model&nbsp;2). Each line is stored as a JSON object with a system prompt and its context messages.
               </p>
             </div>
             <div class="template-editor-content">
@@ -246,7 +250,7 @@
             </div>
           </div>
 
-          <div class="template-editor-actions">
+          <div id="template-editor-actions" class="template-editor-actions">
             <button id="save-template" class="primary-button">Save Template</button>
             <button id="export-template" class="secondary-button">Export to File</button>
             <button id="cancel-edit" class="secondary-button">Cancel</button>

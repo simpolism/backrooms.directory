@@ -84,6 +84,9 @@ export function initializeTemplateEditor(
   const templateEditorForm = document.getElementById(
     'template-editor-form'
   ) as HTMLDivElement | null;
+  const templateEditorActions = document.getElementById(
+    'template-editor-actions'
+  ) as HTMLDivElement | null;
   const templateNameInput = document.getElementById(
     'template-name'
   ) as HTMLInputElement | null;
@@ -130,6 +133,7 @@ export function initializeTemplateEditor(
     !newCustomTemplateBtn ||
     !templateFileInput ||
     !templateEditorForm ||
+    !templateEditorActions ||
     !templateNameInput ||
     !templateDescriptionInput ||
     !saveTemplateBtn ||
@@ -169,7 +173,10 @@ export function initializeTemplateEditor(
 
   templateMessageContainer.appendChild(messageElement);
   templateMessageContainer.appendChild(dismissButton);
-  templateEditorForm!.prepend(templateMessageContainer);
+  templateEditorForm!.insertBefore(
+    templateMessageContainer,
+    templateEditorActions
+  );
 
   dismissButton.addEventListener('click', () => {
     hideTemplateMessage();
@@ -318,8 +325,7 @@ export function initializeTemplateEditor(
       header.className = 'template-segment-header';
 
       const title = document.createElement('h4');
-      title.textContent =
-        segmentIndex === 0 ? 'Model 1 (First Line)' : 'Model 2 (Second Line)';
+      title.textContent = segmentIndex === 0 ? 'Model 1' : 'Model 2';
       header.appendChild(title);
 
       card.appendChild(header);
@@ -376,6 +382,17 @@ export function initializeTemplateEditor(
       const messagesTitle = document.createElement('h5');
       messagesTitle.textContent = 'Context Messages';
       messagesContainer.appendChild(messagesTitle);
+
+      const messagesHint = document.createElement('p');
+      messagesHint.className = 'template-context-hint';
+      if (segmentIndex === 0) {
+        messagesHint.textContent =
+          'Model 1 reads this history. Label roles from Model 2\'s perspective: for example, mark Model 2\'s replies as "user".';
+      } else {
+        messagesHint.textContent =
+          'Model 2 reads this history. Label roles from Model 1\'s perspective: use "user" for things Model 1 has said.';
+      }
+      messagesContainer.appendChild(messagesHint);
 
       segment.messages.forEach((message, messageIndex) => {
         const messageCard = document.createElement('div');
@@ -628,6 +645,9 @@ export function initializeTemplateEditor(
   function openEditorForm(state: EditorTemplateState): void {
     editingTemplateId = state.id ?? null;
     editingOriginalName = state.originalName;
+    saveTemplateBtn!.textContent = editingTemplateId
+      ? 'Update Template'
+      : 'Save Template';
 
     templateNameInput!.value = state.name;
     templateDescriptionInput!.value = state.description || '';
@@ -667,6 +687,7 @@ export function initializeTemplateEditor(
     editingOriginalName = undefined;
     hideTemplateMessage();
     closeModal();
+    saveTemplateBtn!.textContent = 'Save Template';
     segments = createDefaultSegments();
   }
 
