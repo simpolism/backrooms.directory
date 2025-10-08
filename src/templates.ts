@@ -1,57 +1,139 @@
-import { TemplateConfig, CustomTemplate } from './types';
+import { TemplateConfig, CustomTemplate, CustomTemplateInput } from './types';
 import { MODEL_INFO } from './models';
 import { getModelDisplayName } from './utils';
 import {
   saveTemplate as persistTemplate,
   deleteTemplate,
   getTemplate as fetchStoredTemplate,
+  listTemplates,
 } from './state/templateStore';
+import { StoredTemplate } from './state/schema';
 
-const CUSTOM_TEMPLATE_ID = 'custom';
+const CUSTOM_TEMPLATE_PREFIX = 'custom:';
 
-function mapToStoredTemplate(template: CustomTemplate) {
-  const existing = fetchStoredTemplate(CUSTOM_TEMPLATE_ID);
-  const updatedAt = new Date(template.lastModified || Date.now()).toISOString();
-  return {
-    id: CUSTOM_TEMPLATE_ID,
-    name: template.name,
-    description: template.description,
-    content: template.content,
-    createdAt: existing?.createdAt || updatedAt,
-    updatedAt,
-    source: 'custom' as const,
-    metadata: {
-      originalName: template.originalName,
-      lastModified: template.lastModified,
-    },
-  };
+function createCustomTemplateId(): string {
+  const cryptoObj = globalThis.crypto;
+  if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+    return `custom-${cryptoObj.randomUUID()}`;
+  }
+  return `custom-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
 }
 
-// Custom template storage functions
-export function saveCustomTemplate(template: CustomTemplate): void {
-  persistTemplate(mapToStoredTemplate(template));
-}
-
-export function getCustomTemplate(): CustomTemplate | null {
-  const stored = fetchStoredTemplate(CUSTOM_TEMPLATE_ID);
-  if (!stored) {
-    return null;
+function toCustomTemplate(stored: StoredTemplate): CustomTemplate {
+  const rawLastModified = stored.metadata?.lastModified;
+  let lastModified = Date.parse(stored.updatedAt);
+  if (typeof rawLastModified === 'number') {
+    lastModified = rawLastModified;
+  } else if (typeof rawLastModified === 'string') {
+    const parsed = Date.parse(rawLastModified);
+    if (!Number.isNaN(parsed)) {
+      lastModified = parsed;
+    }
   }
 
+  const createdAtIso = stored.createdAt || stored.updatedAt;
+  const createdAtParsed = Date.parse(createdAtIso);
+  const createdAt = Number.isNaN(createdAtParsed)
+    ? Date.now()
+    : createdAtParsed;
+
   return {
+    id: stored.id,
     name: stored.name,
     description: stored.description || '',
     content: stored.content,
-    originalName:
-      (stored.metadata?.originalName as string | undefined) || stored.source,
-    lastModified:
-      (stored.metadata?.lastModified as number | undefined) ||
-      new Date(stored.updatedAt).getTime(),
+    originalName: stored.metadata?.originalName as string | undefined,
+    lastModified,
+    createdAt,
+    stopTokens: Array.isArray(stored.stopTokens)
+      ? stored.stopTokens.map((token) => `${token}`)
+      : undefined,
   };
 }
 
-export function clearCustomTemplate(): void {
-  deleteTemplate(CUSTOM_TEMPLATE_ID);
+export function buildCustomTemplateValue(id: string): string {
+  return `${CUSTOM_TEMPLATE_PREFIX}${id}`;
+}
+
+export function extractCustomTemplateId(value: string): string | null {
+  if (!value) {
+    return null;
+  }
+
+  if (value === 'custom') {
+    return 'custom';
+  }
+
+  if (value.startsWith(CUSTOM_TEMPLATE_PREFIX)) {
+    return value.substring(CUSTOM_TEMPLATE_PREFIX.length);
+  }
+
+  return null;
+}
+
+export function formatCustomTemplateLabel(template: CustomTemplate): string {
+  return template.description
+    ? `Custom: ${template.name} - ${template.description}`
+    : `Custom: ${template.name}`;
+}
+
+export function listCustomTemplates(): CustomTemplate[] {
+  return listTemplates()
+    .filter((template) => template.source !== 'built-in')
+    .map((template) => {
+      if (!template.source) {
+        // Treat legacy entries without explicit source as custom templates
+        return { ...template, source: 'custom' as const };
+      }
+      return template;
+    })
+    .filter((template) => template.source === 'custom')
+    .map(toCustomTemplate)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function getCustomTemplate(id: string): CustomTemplate | null {
+  const stored = fetchStoredTemplate(id);
+  if (!stored || stored.source === 'built-in') {
+    return null;
+  }
+  return toCustomTemplate(stored);
+}
+
+export function saveCustomTemplate(
+  template: CustomTemplateInput
+): CustomTemplate {
+  const now = Date.now();
+  const id = template.id || createCustomTemplateId();
+  const existing = fetchStoredTemplate(id);
+  const createdAt = existing?.createdAt || new Date(now).toISOString();
+
+  const storedTemplate: StoredTemplate = {
+    id,
+    name: template.name,
+    description: template.description,
+    content: template.content,
+    stopTokens: template.stopTokens,
+    createdAt,
+    updatedAt: new Date(now).toISOString(),
+    source: 'custom',
+    metadata: {
+      ...(existing?.metadata || {}),
+      originalName:
+        template.originalName ??
+        (existing?.metadata?.originalName as string | undefined),
+      lastModified: template.lastModified ?? now,
+    },
+  };
+
+  persistTemplate(storedTemplate);
+  return toCustomTemplate(storedTemplate);
+}
+
+export function deleteCustomTemplate(id: string): void {
+  deleteTemplate(id);
 }
 
 export async function loadTemplate(
@@ -59,19 +141,18 @@ export async function loadTemplate(
   models: string[]
 ): Promise<TemplateConfig[]> {
   try {
-    let text: string;
+    let text = '';
+    const customTemplateId = extractCustomTemplateId(templateName);
 
-    // Check if this is the custom template
-    if (templateName === 'custom') {
-      const customTemplate = getCustomTemplate();
+    if (customTemplateId) {
+      const customTemplate = getCustomTemplate(customTemplateId);
 
       if (!customTemplate) {
-        throw new Error('Custom template not found.');
+        throw new Error(`Custom template '${customTemplateId}' not found.`);
       }
 
       text = customTemplate.content;
     } else {
-      // Load built-in template
       const response = await fetch(`./public/templates/${templateName}.jsonl`);
       if (!response.ok) {
         throw new Error(`Template '${templateName}' not found.`);

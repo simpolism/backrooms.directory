@@ -58,12 +58,19 @@ export type ExploreStreamingCallback = (
 ) => void;
 
 export interface CustomTemplate {
-  name: string; // Display name for the template
+  id: string; // Unique identifier for the template
+  name: string; // Display name
   description: string; // Brief description of what the template does
   content: string; // Raw JSONL content
   originalName?: string; // Name of original template if this is based on an existing one
-  lastModified: number; // Timestamp
+  lastModified: number; // Timestamp (ms)
+  createdAt: number; // Creation timestamp (ms)
+  stopTokens?: string[]; // Optional stop tokens
 }
+
+export type CustomTemplateInput = Omit<CustomTemplate, 'id' | 'createdAt'> & {
+  id?: string;
+};
 
 // Usage data for token counting and cost tracking
 export interface UsageData {

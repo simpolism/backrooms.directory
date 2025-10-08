@@ -6,7 +6,7 @@ The TypeScript source lives in `src/`, with UI orchestration in `src/app.ts`, AP
 
 ## Build, Test, and Development Commands
 
-Run `pnpm dev` for the hot-reloading webpack dev server and keep the browser console open for API errors. Use `pnpm build` to emit a production bundle, and `pnpm start` when you want webpack-dev-server to open a browser tab automatically. Quality gates: `pnpm lint` (or `pnpm lint:fix`) for ESLint, `pnpm format:check` for Prettier verification, and `pnpm format` to rewrite files.
+Run `pnpm dev` for the hot-reloading webpack dev server and keep the browser console open for API errors. Use `pnpm build` to emit a production bundle, and `pnpm start` when you want webpack-dev-server to open a browser tab automatically. Quality gates: `pnpm lint` (or `pnpm lint:fix`) for ESLint, `pnpm typecheck` for TypeScript correctness, `pnpm format:check` for Prettier verification, and `pnpm format` to rewrite files.
 
 ## Coding Style & Naming Conventions
 

@@ -5,6 +5,10 @@ import {
   loadTemplate,
   getAvailableTemplates,
   getCustomTemplate,
+  listCustomTemplates,
+  buildCustomTemplateValue,
+  extractCustomTemplateId,
+  formatCustomTemplateLabel,
 } from './templates';
 import {
   generateDistinctColors,
@@ -503,9 +507,9 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       let text: string;
 
-      // Check if this is the custom template
-      if (templateName === 'custom') {
-        const customTemplate = getCustomTemplate();
+      const customTemplateId = extractCustomTemplateId(templateName);
+      if (customTemplateId) {
+        const customTemplate = getCustomTemplate(customTemplateId);
 
         if (!customTemplate) {
           throw new Error('Custom template not found.');
@@ -555,6 +559,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function populateTemplateSelect() {
     try {
       const templates = await getAvailableTemplates();
+      const customTemplates = listCustomTemplates();
       templateSelect.innerHTML = '';
 
       templates.forEach((template) => {
@@ -567,31 +572,52 @@ document.addEventListener('DOMContentLoaded', () => {
         templateSelect.appendChild(option);
       });
 
-      // Check if custom template exists and add it to the dropdown
-      const customTemplate = getCustomTemplate();
-      if (customTemplate) {
+      customTemplates.forEach((template) => {
         const customOption = document.createElement('option');
-        customOption.value = 'custom';
-        // Show both name and description for custom template
-        customOption.textContent = customTemplate.description
-          ? `Custom: ${customTemplate.name} - ${customTemplate.description}`
-          : `Custom: ${customTemplate.name}`;
+        customOption.value = buildCustomTemplateValue(template.id);
+        customOption.textContent = formatCustomTemplateLabel(template);
         templateSelect.appendChild(customOption);
+      });
+
+      let selectionToApply = savedTemplateSelection;
+      if (selectionToApply === 'custom' && customTemplates.length > 0) {
+        selectionToApply = buildCustomTemplateValue(customTemplates[0].id);
+        updateSettings({ selectedTemplate: selectionToApply });
       }
 
-      // Set selected template if available
-      if (savedTemplateSelection) {
-        // Check if the saved selection exists in the options
-        let selectionExists = false;
-        for (let i = 0; i < templateSelect.options.length; i++) {
-          if (templateSelect.options[i].value === savedTemplateSelection) {
-            selectionExists = true;
-            break;
-          }
-        }
+      const optionValues = Array.from(templateSelect.options).map(
+        (option) => option.value
+      );
 
-        if (selectionExists) {
-          templateSelect.value = savedTemplateSelection;
+      // Set selected template if available
+      if (selectionToApply && optionValues.includes(selectionToApply)) {
+        templateSelect.value = selectionToApply;
+      } else if (optionValues.length > 0) {
+        templateSelect.value = optionValues[0];
+        if (selectionToApply && selectionToApply !== templateSelect.value) {
+          updateSettings({ selectedTemplate: templateSelect.value });
+        }
+      }
+
+      if (
+        selectionToApply &&
+        !optionValues.includes(selectionToApply) &&
+        customTemplates.length > 0 &&
+        !templateSelect.value.startsWith('custom:')
+      ) {
+        // Ensure at least the first custom template is selected when saved selection is invalid
+        const firstCustomValue = buildCustomTemplateValue(
+          customTemplates[0].id
+        );
+        templateSelect.value = firstCustomValue;
+        updateSettings({ selectedTemplate: firstCustomValue });
+      }
+
+      if (selectionToApply) {
+        // Check if the saved selection exists in the options
+        const selectionExists = optionValues.includes(selectionToApply);
+        if (!selectionExists && templateSelect.value) {
+          updateSettings({ selectedTemplate: templateSelect.value });
         }
       }
 
@@ -646,7 +672,7 @@ document.addEventListener('DOMContentLoaded', () => {
       'edit-current-template'
     ) as HTMLButtonElement | null,
     document.getElementById('import-template') as HTMLButtonElement | null,
-    document.getElementById('edit-custom-template') as HTMLButtonElement | null,
+    document.getElementById('new-custom-template') as HTMLButtonElement | null,
   ].filter((button): button is HTMLButtonElement => Boolean(button));
 
   function setTemplateButtonsDisabled(disabled: boolean): void {

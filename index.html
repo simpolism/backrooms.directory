@@ -90,6 +90,7 @@
           <div class="template-editor-controls">
             <button id="edit-current-template" class="secondary-button">Edit Current Template</button>
             <button id="import-template" class="secondary-button">Import Template</button>
+            <button id="new-custom-template" class="secondary-button">New Custom Template</button>
             <input type="file" id="template-file-input" accept=".jsonl" style="display: none;">
           </div>
           
@@ -113,18 +114,15 @@
             
             <!-- Template Editor Actions -->
             <div class="template-editor-actions">
-              <button id="save-template" class="primary-button">Save as Custom Template</button>
+              <button id="save-template" class="primary-button">Save Template</button>
               <button id="export-template" class="secondary-button">Export to File</button>
-              <button id="clear-custom-template" class="secondary-button">Clear Custom Template</button>
               <button id="cancel-edit" class="secondary-button">Cancel</button>
             </div>
           </div>
-          
-          <!-- Custom Template Status -->
-          <div id="custom-template-status" style="display: none;">
-            <p>Using custom template: <span id="custom-template-name"></span></p>
-            <button id="edit-custom-template" class="secondary-button">Edit</button>
-            <button id="clear-custom-template-status" class="secondary-button">Clear</button>
+
+          <div class="custom-templates-panel">
+            <h3>Saved Custom Templates</h3>
+            <div id="custom-template-list" class="custom-template-list"></div>
           </div>
         </div>
       </div>
