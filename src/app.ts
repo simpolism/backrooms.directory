@@ -9,6 +9,7 @@ import {
   buildCustomTemplateValue,
   extractCustomTemplateId,
   formatCustomTemplateLabel,
+  type TemplateInfo,
 } from './templates';
 import {
   generateDistinctColors,
@@ -16,7 +17,7 @@ import {
   saveToLocalStorage,
   loadFromLocalStorage,
 } from './utils';
-import { ApiKeys, SelectionCallback } from './types';
+import { ApiKeys, SelectionCallback, TemplateConfig, Message } from './types';
 import {
   initiateOAuthFlow,
   handleOAuthCallback,
@@ -121,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   let modelController: ModelSelectorController | null = null;
   let conversationLifecycle: ConversationLifecycleController | null = null;
+  const builtInTemplateInfo = new Map<string, TemplateInfo>();
 
   // Font size and word wrap controls
   const decreaseFontSizeBtn = document.getElementById(
@@ -540,6 +542,52 @@ document.addEventListener('DOMContentLoaded', () => {
     exploreModeController.updateVisibility(settings.exploreModeSettings || {});
   };
 
+  function resolveTemplateDetails(templateValue: string): {
+    name: string;
+    description: string;
+    source: 'built-in' | 'custom';
+  } {
+    const customId = extractCustomTemplateId(templateValue);
+    if (customId && customId !== 'custom') {
+      const customTemplate = getCustomTemplate(customId);
+      if (customTemplate) {
+        return {
+          name: customTemplate.name,
+          description: customTemplate.description || '',
+          source: 'custom',
+        };
+      }
+    }
+
+    if (customId === 'custom') {
+      return {
+        name: 'Custom Template',
+        description: '',
+        source: 'custom',
+      };
+    }
+
+    const builtIn = builtInTemplateInfo.get(templateValue);
+    if (builtIn) {
+      return {
+        name: builtIn.name,
+        description: builtIn.description || '',
+        source: 'built-in',
+      };
+    }
+
+    const fallbackText =
+      templateSelect.selectedOptions.length > 0
+        ? templateSelect.selectedOptions[0].textContent?.trim()
+        : null;
+
+    return {
+      name: fallbackText || templateValue,
+      description: '',
+      source: customId ? 'custom' : 'built-in',
+    };
+  }
+
   modelController = createModelSelectorController({
     modelInputs,
     templateSelect,
@@ -561,6 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const templates = await getAvailableTemplates();
       const customTemplates = listCustomTemplates();
       templateSelect.innerHTML = '';
+      builtInTemplateInfo.clear();
 
       templates.forEach((template) => {
         const option = document.createElement('option');
@@ -570,6 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ? `${template.name} - ${template.description}`
           : template.name;
         templateSelect.appendChild(option);
+        builtInTemplateInfo.set(template.name, template);
       });
 
       customTemplates.forEach((template) => {
@@ -872,14 +922,83 @@ document.addEventListener('DOMContentLoaded', () => {
     const systemPrompts = configs.map((config) => config.system_prompt || null);
     const contexts = configs.map((config) => config.context || []);
 
+    const templateDetails = resolveTemplateDetails(templateName);
+    const templateTitle = templateDetails.description
+      ? `${templateDetails.name} - ${templateDetails.description}`
+      : templateDetails.name;
+
+    const describeModelBootstrap = (
+      config: TemplateConfig,
+      modelKey: string,
+      modelIndex: number
+    ): string => {
+      const customModel = loadCustomModel(modelIndex);
+      const displayName =
+        customModel?.name ||
+        MODEL_INFO[modelKey]?.display_name ||
+        modelKey ||
+        `Model ${modelIndex + 1}`;
+
+      const lines: string[] = [
+        `Model ${modelIndex + 1} (${displayName}) starting context:`,
+      ];
+
+      const systemPrompt =
+        typeof config.system_prompt === 'string' ? config.system_prompt : '';
+      if (systemPrompt.trim().length > 0) {
+        lines.push('  System prompt:');
+        systemPrompt.split(/\r?\n/).forEach((line) => {
+          lines.push(`    ${line}`);
+        });
+      } else {
+        lines.push('  System prompt: (none)');
+      }
+
+      const contextMessages = Array.isArray(config.context)
+        ? (config.context as Message[])
+        : [];
+
+      if (contextMessages.length > 0) {
+        lines.push('  Context messages:');
+        contextMessages.forEach((message, messageIndex) => {
+          const role =
+            typeof message?.role === 'string' ? message.role : 'unknown';
+          const content =
+            typeof message?.content === 'string' ? message.content : '';
+          if (content.trim().length === 0) {
+            lines.push(`    ${messageIndex + 1}. [${role}] (empty)`);
+            return;
+          }
+
+          if (content.includes('\n')) {
+            lines.push(`    ${messageIndex + 1}. [${role}]`);
+            content.split(/\r?\n/).forEach((line) => {
+              lines.push(`      ${line}`);
+            });
+          } else {
+            lines.push(`    ${messageIndex + 1}. [${role}] ${content}`);
+          }
+        });
+      } else {
+        lines.push('  Context messages: (none)');
+      }
+
+      return lines.join('\n');
+    };
+
     const exploreModeSettings = settings.exploreModeSettings || {};
     const seedValue = seedInput.value.trim();
     const seed = seedValue ? parseInt(seedValue, 10) : undefined;
 
     addOutputMessage(
       'System',
-      `Starting conversation with template "${templateName}"...`
+      `Starting conversation with template "${templateTitle}".\nEchoing initial model context for reference.`
     );
+
+    configs.forEach((config, index) => {
+      const summary = describeModelBootstrap(config, models[index], index);
+      addOutputMessage('System', summary);
+    });
 
     return new Conversation({
       models,
