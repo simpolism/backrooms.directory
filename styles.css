@@ -338,22 +338,15 @@ input:disabled + .toggle-slider:before {
 .collapsible-content {
   padding: 10px;
   transition: none;
-  max-height: 1000px;
-  opacity: 1;
-  overflow: hidden;
+  display: none;
+}
+
+.collapsible-section:not(.collapsed) > .collapsible-content {
+  display: block;
 }
 
 .collapsed .collapsible-content {
-  max-height: 0;
-  opacity: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-/* Ensure settings panel content is hidden when collapsed */
-.settings-panel.collapsed > .collapsible-content {
-  max-height: 0;
-  opacity: 0;
+  display: none;
   padding-top: 0;
   padding-bottom: 0;
 }
@@ -386,20 +379,153 @@ input:disabled + .toggle-slider:before {
   margin-bottom: 15px;
 }
 
-.template-content-editor {
-  margin-bottom: 15px;
+#template-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #000000;
+  border-radius: 6px;
+  background-color: #F8F8F8;
 }
 
-.template-content-editor textarea {
-  width: 100%;
-  font-family: monospace;
-  font-size: 14px;
+.template-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+  padding-right: 4px;
+}
+
+.template-segment-card {
+  background-color: #FFFFFF;
+  border: 1px solid #000000;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 2px 2px 0 #000000;
+}
+
+.template-segment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.template-segment-header h4 {
+  margin: 0;
+}
+
+.template-segment-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.template-message-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.template-message-card {
+  border: 1px dashed #000000;
+  border-radius: 4px;
   padding: 10px;
+  background-color: #FAFAFA;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.template-message-card label {
+  font-weight: bold;
+}
+
+.template-message-card select,
+.template-message-card textarea,
+.template-segment-card textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
   border: 1px solid #000000;
   border-radius: 4px;
-  resize: vertical;
-  min-height: 200px;
   background-color: #FFFFFF;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.template-message-card textarea {
+  min-height: 130px;
+}
+
+.template-segment-card textarea {
+  min-height: 80px;
+}
+
+.template-message-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  padding: 0;
+}
+
+.icon-button.small {
+  width: 32px;
+  height: 32px;
+  font-size: 15px;
+}
+
+.template-preview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  border: 1px solid #000000;
+  border-radius: 6px;
+  background-color: #FFFFFF;
+}
+
+.template-jsonl-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+
+.template-jsonl-preview {
+  flex: 1 1 auto;
+  min-height: 220px;
+  max-height: 45vh;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid #000000;
+  border-radius: 4px;
+  background-color: #1E1E1E;
+  color: #F0F0F0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.template-preview-panel button {
+  align-self: flex-start;
 }
 
 .template-editor-actions {
@@ -428,6 +554,22 @@ input:disabled + .toggle-slider:before {
 
 #custom-template-name {
   font-weight: bold;
+}
+
+@media (max-width: 900px) {
+  #template-editor-form {
+    max-height: none;
+  }
+
+  .template-config-list {
+    max-height: none;
+  }
+  .template-preview-panel {
+    min-width: 100%;
+  }
+  .template-jsonl-preview {
+    max-height: none;
+  }
 }
 
 /* Disclaimer Styles */
@@ -1014,4 +1156,9 @@ input:disabled + .toggle-slider:before {
 .model-stat-value {
   font-weight: bold;
   color: #333333;
+}
+.model-contexts-description {
+  margin: 0;
+  font-size: 13px;
+  color: #555555;
 }

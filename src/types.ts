@@ -6,7 +6,7 @@ export interface ModelInfo {
 }
 
 export interface Message {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'developer' | 'tool';
   content: string;
 }
 

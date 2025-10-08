@@ -106,10 +106,19 @@
               <input type="text" id="template-description" placeholder="Brief description of what this template does">
             </div>
             
-            <!-- Template Content Editor -->
-            <div class="template-content-editor">
-              <label for="template-content">Template Content (JSONL):</label>
-              <textarea id="template-content" rows="10"></textarea>
+            <p class="model-contexts-description">
+              Line 1 feeds Model 1, Line 2 feeds Model 2. Each line is saved as a JSON object containing the system prompt and context messages.
+            </p>
+            <div id="template-config-list" class="template-config-list"></div>
+            <div class="template-preview-panel collapsible-section collapsed">
+              <div class="collapsible-header" id="jsonl-preview-toggle">
+                <h2>JSONL Preview</h2>
+                <span class="collapse-indicator">▼</span>
+              </div>
+              <div id="jsonl-preview-container" class="collapsible-content template-jsonl-container">
+                <pre id="template-jsonl-preview" class="template-jsonl-preview">// JSONL preview updates as you edit.</pre>
+                <button id="copy-jsonl" class="secondary-button">Copy JSONL</button>
+              </div>
             </div>
             
             <!-- Template Editor Actions -->
