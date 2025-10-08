@@ -94,41 +94,6 @@
             <input type="file" id="template-file-input" accept=".jsonl" style="display: none;">
           </div>
           
-          <!-- Template Editor Form -->
-          <div id="template-editor-form" style="display: none;">
-            <div class="input-group">
-              <label for="template-name">Template Name:</label>
-              <input type="text" id="template-name" placeholder="Enter template name">
-            </div>
-            
-            <div class="input-group">
-              <label for="template-description">Description:</label>
-              <input type="text" id="template-description" placeholder="Brief description of what this template does">
-            </div>
-            
-            <p class="model-contexts-description">
-              Line 1 feeds Model 1, Line 2 feeds Model 2. Each line is saved as a JSON object containing the system prompt and context messages.
-            </p>
-            <div id="template-config-list" class="template-config-list"></div>
-            <div class="template-preview-panel collapsible-section collapsed">
-              <div class="collapsible-header" id="jsonl-preview-toggle">
-                <h2>JSONL Preview</h2>
-                <span class="collapse-indicator">▼</span>
-              </div>
-              <div id="jsonl-preview-container" class="collapsible-content template-jsonl-container">
-                <pre id="template-jsonl-preview" class="template-jsonl-preview">// JSONL preview updates as you edit.</pre>
-                <button id="copy-jsonl" class="secondary-button">Copy JSONL</button>
-              </div>
-            </div>
-            
-            <!-- Template Editor Actions -->
-            <div class="template-editor-actions">
-              <button id="save-template" class="primary-button">Save Template</button>
-              <button id="export-template" class="secondary-button">Export to File</button>
-              <button id="cancel-edit" class="secondary-button">Cancel</button>
-            </div>
-          </div>
-
           <div class="custom-templates-panel">
             <h3>Saved Custom Templates</h3>
             <div id="custom-template-list" class="custom-template-list"></div>
@@ -237,6 +202,57 @@
     <div style="text-align: center; margin-top: 20px; font-size: 12px; color: #666666;">
       <hr>
       Last updated: March 2025 | <a href="https://github.com/simpolism/backrooms.directory" target="_blank">GitHub</a>
+    </div>
+  </div>
+
+  <div id="template-editor-modal" class="template-editor-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="template-editor-title">
+    <div class="template-editor-modal__container" tabindex="-1">
+      <div class="template-editor-modal__header">
+        <h2 id="template-editor-title">Template Editor</h2>
+        <div class="template-editor-modal__header-actions">
+          <button id="close-template-editor" class="secondary-button">Close</button>
+        </div>
+      </div>
+      <div class="template-editor-modal__body">
+        <div id="template-editor-form">
+          <div class="template-editor-grid">
+            <div class="template-editor-meta">
+              <div class="input-group">
+                <label for="template-name">Template Name:</label>
+                <input type="text" id="template-name" placeholder="Enter template name">
+              </div>
+
+              <div class="input-group">
+                <label for="template-description">Description:</label>
+                <input type="text" id="template-description" placeholder="Brief description of what this template does">
+              </div>
+
+              <p class="model-contexts-description">
+                Line 1 feeds Model 1, Line 2 feeds Model 2. Each line is saved as a JSON object containing the system prompt and context messages.
+              </p>
+            </div>
+            <div class="template-editor-content">
+              <div id="template-config-list" class="template-config-list"></div>
+            </div>
+          </div>
+          <div class="template-preview-panel collapsible-section collapsed">
+            <div class="collapsible-header" id="jsonl-preview-toggle">
+              <h2>JSONL Preview</h2>
+              <span class="collapse-indicator">▼</span>
+            </div>
+            <div id="jsonl-preview-container" class="collapsible-content template-jsonl-container">
+              <pre id="template-jsonl-preview" class="template-jsonl-preview">// JSONL preview updates as you edit.</pre>
+              <button id="copy-jsonl" class="secondary-button">Copy JSONL</button>
+            </div>
+          </div>
+
+          <div class="template-editor-actions">
+            <button id="save-template" class="primary-button">Save Template</button>
+            <button id="export-template" class="secondary-button">Export to File</button>
+            <button id="cancel-edit" class="secondary-button">Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   

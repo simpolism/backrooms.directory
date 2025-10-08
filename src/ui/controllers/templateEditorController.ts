@@ -111,6 +111,18 @@ export function initializeTemplateEditor(
   const copyJsonlBtn = document.getElementById(
     'copy-jsonl'
   ) as HTMLButtonElement | null;
+  const templateEditorModal = document.getElementById(
+    'template-editor-modal'
+  ) as HTMLDivElement | null;
+  const templateEditorModalContainer = templateEditorModal?.querySelector(
+    '.template-editor-modal__container'
+  ) as HTMLDivElement | null;
+  const templateEditorModalBody = templateEditorModal?.querySelector(
+    '.template-editor-modal__body'
+  ) as HTMLDivElement | null;
+  const closeTemplateEditorBtn = document.getElementById(
+    'close-template-editor'
+  ) as HTMLButtonElement | null;
 
   if (
     !editCurrentTemplateBtn ||
@@ -126,50 +138,41 @@ export function initializeTemplateEditor(
     !customTemplatesList ||
     !templateConfigList ||
     !jsonlPreview ||
-    !copyJsonlBtn
+    !copyJsonlBtn ||
+    !templateEditorModal ||
+    !templateEditorModalContainer ||
+    !templateEditorModalBody ||
+    !closeTemplateEditorBtn
   ) {
     console.warn('Template editor controls are missing from the DOM.');
     return;
   }
 
-  const templateMessageContainer = document.createElement('div');
-  templateMessageContainer.className = 'template-message-container';
-  templateMessageContainer.style.display = 'none';
-  templateMessageContainer.style.marginTop = '15px';
-  templateMessageContainer.style.marginBottom = '15px';
-  templateMessageContainer.style.padding = '8px 10px';
-  templateMessageContainer.style.border = '1px solid #000000';
-  templateMessageContainer.style.fontSize = '14px';
-  templateMessageContainer.style.fontFamily = 'Times New Roman, serif';
-  templateMessageContainer.style.backgroundColor = '#EEEEEE';
-  templateMessageContainer.style.color = '#FF0000';
-  templateMessageContainer.style.position = 'relative';
-  templateMessageContainer.style.width = '100%';
-  templateMessageContainer.style.boxSizing = 'border-box';
+  const modal = templateEditorModal;
+  const modalContainer = templateEditorModalContainer;
+  const modalBody = templateEditorModalBody;
 
-  const dismissButton = document.createElement('button');
-  dismissButton.textContent = '×';
-  dismissButton.style.position = 'absolute';
-  dismissButton.style.right = '5px';
-  dismissButton.style.top = '5px';
-  dismissButton.style.background = 'none';
-  dismissButton.style.border = 'none';
-  dismissButton.style.fontSize = '16px';
-  dismissButton.style.fontWeight = 'bold';
-  dismissButton.style.cursor = 'pointer';
-  dismissButton.style.padding = '0 5px';
-  dismissButton.style.lineHeight = '1';
-  dismissButton.title = 'Dismiss';
+  modalContainer.setAttribute('tabindex', '-1');
+
+  const templateMessageContainer = document.createElement('div');
+  templateMessageContainer.className = 'template-editor-message';
 
   const messageElement = document.createElement('div');
-  messageElement.style.paddingRight = '20px';
+  messageElement.className = 'template-editor-message-text';
 
-  templateMessageContainer.appendChild(dismissButton);
+  const dismissButton = document.createElement('button');
+  dismissButton.type = 'button';
+  dismissButton.className = 'template-editor-message-dismiss';
+  dismissButton.title = 'Dismiss';
+  dismissButton.setAttribute('aria-label', 'Dismiss message');
+  dismissButton.textContent = '×';
+
   templateMessageContainer.appendChild(messageElement);
-  templateEditorForm!.appendChild(templateMessageContainer);
+  templateMessageContainer.appendChild(dismissButton);
+  templateEditorForm!.prepend(templateMessageContainer);
 
   dismissButton.addEventListener('click', () => {
-    templateMessageContainer.style.display = 'none';
+    hideTemplateMessage();
   });
 
   function showTemplateMessage(
@@ -177,20 +180,43 @@ export function initializeTemplateEditor(
     variant: 'info' | 'error' = 'error'
   ): void {
     messageElement.textContent = message;
-    templateMessageContainer.style.display = 'block';
-    templateMessageContainer.style.color =
-      variant === 'error' ? '#FF0000' : '#2E7D32';
-    templateMessageContainer.style.border =
-      variant === 'error' ? '1px solid #FF0000' : '1px solid #2E7D32';
+    templateMessageContainer.classList.add('visible');
+    if (variant === 'info') {
+      templateMessageContainer.classList.add('info');
+    } else {
+      templateMessageContainer.classList.remove('info');
+    }
   }
 
   function hideTemplateMessage(): void {
-    templateMessageContainer.style.display = 'none';
+    templateMessageContainer.classList.remove('visible');
+    templateMessageContainer.classList.remove('info');
+    messageElement.textContent = '';
+  }
+
+  function openModal(): void {
+    lastActiveElement = document.activeElement as HTMLElement | null;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+    modalContainer.focus();
+  }
+
+  function closeModal(): void {
+    modalContainer.blur();
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+    if (lastActiveElement && typeof lastActiveElement.focus === 'function') {
+      lastActiveElement.focus();
+    }
+    lastActiveElement = null;
   }
 
   let editingTemplateId: string | null = null;
   let editingOriginalName: string | undefined;
   let segments: TemplateSegmentState[] = createDefaultSegments();
+  let lastActiveElement: HTMLElement | null = null;
 
   function parseJsonl(content: string): {
     segments: TemplateSegmentState[];
@@ -301,18 +327,47 @@ export function initializeTemplateEditor(
       const systemPromptGroup = document.createElement('div');
       systemPromptGroup.className = 'input-group';
 
+      const systemPromptHeader = document.createElement('div');
+      systemPromptHeader.className = 'input-label-row';
+
       const systemPromptLabel = document.createElement('label');
       systemPromptLabel.textContent = 'System Prompt (optional)';
-      systemPromptGroup.appendChild(systemPromptLabel);
+      systemPromptHeader.appendChild(systemPromptLabel);
 
       const systemPromptTextarea = document.createElement('textarea');
       systemPromptTextarea.value = segment.systemPrompt;
       systemPromptTextarea.rows = 3;
+      const systemPromptCopyButton = document.createElement('button');
+      systemPromptCopyButton.className = 'secondary-button icon-button small';
+      systemPromptCopyButton.textContent = '📋';
+      systemPromptCopyButton.title = 'Copy system prompt';
+      systemPromptCopyButton.setAttribute('aria-label', 'Copy system prompt');
+      const updateSystemPromptCopyState = () => {
+        systemPromptCopyButton.disabled =
+          segment.systemPrompt.trim().length === 0;
+      };
+      systemPromptCopyButton.addEventListener('click', async () => {
+        if (!segment.systemPrompt.trim()) {
+          return;
+        }
+        try {
+          await window.navigator.clipboard.writeText(segment.systemPrompt);
+          showTemplateMessage('System prompt copied.', 'info');
+        } catch (error) {
+          console.error('Failed to copy system prompt:', error);
+          showTemplateMessage('Unable to copy system prompt.');
+        }
+      });
+      systemPromptHeader.appendChild(systemPromptCopyButton);
+      systemPromptGroup.appendChild(systemPromptHeader);
+
       systemPromptTextarea.addEventListener('input', (event) => {
         segment.systemPrompt = (event.target as HTMLTextAreaElement).value;
+        updateSystemPromptCopyState();
         renderJsonlPreview();
       });
       systemPromptGroup.appendChild(systemPromptTextarea);
+      updateSystemPromptCopyState();
       card.appendChild(systemPromptGroup);
 
       const messagesContainer = document.createElement('div');
@@ -602,14 +657,16 @@ export function initializeTemplateEditor(
       segments = createDefaultSegments();
     }
 
-    templateEditorForm!.style.display = 'block';
+    openModal();
     renderSegments();
+    modalBody.scrollTo({ top: 0 });
   }
 
   function closeEditorForm(): void {
     editingTemplateId = null;
     editingOriginalName = undefined;
-    templateEditorForm!.style.display = 'none';
+    hideTemplateMessage();
+    closeModal();
     segments = createDefaultSegments();
   }
 
@@ -812,6 +869,23 @@ export function initializeTemplateEditor(
 
   cancelEditBtn.addEventListener('click', () => {
     closeEditorForm();
+  });
+
+  closeTemplateEditorBtn.addEventListener('click', () => {
+    closeEditorForm();
+  });
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closeEditorForm();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+      event.preventDefault();
+      closeEditorForm();
+    }
   });
 
   renderCustomTemplatesList();
